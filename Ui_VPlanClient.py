@@ -9,6 +9,7 @@
 
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import QObject, pyqtSignal, pyqtSlot
+from Printer import Printer
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -58,7 +59,7 @@ class Ui_VPlanClient():
         self.vplantable.setGridStyle(QtCore.Qt.DotLine)
         self.vplantable.setCornerButtonEnabled(False)
         self.vplantable.setObjectName(_fromUtf8("vplantable"))
-        self.vplantable.setColumnCount(7)
+        self.vplantable.setColumnCount(9)
         self.vplantable.setRowCount(7)
         #font = QtGui.QFont()
         #font.setPointSize(14)
@@ -70,28 +71,6 @@ class Ui_VPlanClient():
         #self.vplantable.setColumnWidth(6, 150)
 
         # DATA BEGIN
-        # ROWS
-        item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "12/1", None, QtGui.QApplication.UnicodeUTF8))
-        self.vplantable.setVerticalHeaderItem(0, item)
-        item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "12/1-Data", None, QtGui.QApplication.UnicodeUTF8))
-        self.vplantable.setVerticalHeaderItem(1, item)
-        item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "12/1-Data", None, QtGui.QApplication.UnicodeUTF8))
-        self.vplantable.setVerticalHeaderItem(2, item)
-        item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "13/1", None, QtGui.QApplication.UnicodeUTF8))
-        self.vplantable.setVerticalHeaderItem(3, item)
-        item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "13/1-Data", None, QtGui.QApplication.UnicodeUTF8))
-        self.vplantable.setVerticalHeaderItem(4, item)
-        item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "13/2", None, QtGui.QApplication.UnicodeUTF8))
-        self.vplantable.setVerticalHeaderItem(5, item)
-        item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "13/2-Data", None, QtGui.QApplication.UnicodeUTF8))
-        self.vplantable.setVerticalHeaderItem(6, item)
 
         # COLS
         item = QtGui.QTableWidgetItem()
@@ -101,20 +80,26 @@ class Ui_VPlanClient():
         item.setText(QtGui.QApplication.translate("VPlanClient", "Lehrer", None, QtGui.QApplication.UnicodeUTF8))
         self.vplantable.setHorizontalHeaderItem(1, item)
         item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "Raum", None, QtGui.QApplication.UnicodeUTF8))
+        item.setText(QtGui.QApplication.translate("VPlanClient", "Fach", None, QtGui.QApplication.UnicodeUTF8))
         self.vplantable.setHorizontalHeaderItem(2, item)
         item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "VLehrer", None, QtGui.QApplication.UnicodeUTF8))
+        item.setText(QtGui.QApplication.translate("VPlanClient", "Raum", None, QtGui.QApplication.UnicodeUTF8))
         self.vplantable.setHorizontalHeaderItem(3, item)
         item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "VRaum", None, QtGui.QApplication.UnicodeUTF8))
+        item.setText(QtGui.QApplication.translate("VPlanClient", "VLehrer", None, QtGui.QApplication.UnicodeUTF8))
         self.vplantable.setHorizontalHeaderItem(4, item)
         item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "Merkmal", None, QtGui.QApplication.UnicodeUTF8))
+        item.setText(QtGui.QApplication.translate("VPlanClient", "VFach", None, QtGui.QApplication.UnicodeUTF8))
         self.vplantable.setHorizontalHeaderItem(5, item)
         item = QtGui.QTableWidgetItem()
-        item.setText(QtGui.QApplication.translate("VPlanClient", "Info", None, QtGui.QApplication.UnicodeUTF8))
+        item.setText(QtGui.QApplication.translate("VPlanClient", "VRaum", None, QtGui.QApplication.UnicodeUTF8))
         self.vplantable.setHorizontalHeaderItem(6, item)
+        item = QtGui.QTableWidgetItem()
+        item.setText(QtGui.QApplication.translate("VPlanClient", "Merkmal", None, QtGui.QApplication.UnicodeUTF8))
+        self.vplantable.setHorizontalHeaderItem(7, item)
+        item = QtGui.QTableWidgetItem()
+        item.setText(QtGui.QApplication.translate("VPlanClient", "Info", None, QtGui.QApplication.UnicodeUTF8))
+        self.vplantable.setHorizontalHeaderItem(8, item)
 
         # DATA - HEADER
         item = QtGui.QTableWidgetItem()
@@ -128,7 +113,7 @@ class Ui_VPlanClient():
         #item.setStyleSheet(_fromUtf8("border: 1px solid #000000;"))
         self.vplantable.setItem(0, 0, item)
         # now set the colspan
-        self.vplantable.setSpan(0, 0, 1, 7)
+        self.vplantable.setSpan(0, 0, 1, 9)
 
         # DATA 12/1
         item = QtGui.QTableWidgetItem()
@@ -150,13 +135,13 @@ class Ui_VPlanClient():
         item = QtGui.QTableWidgetItem()
         item.setText(QtGui.QApplication.translate("VPlanClient", "110", None, QtGui.QApplication.UnicodeUTF8))
         item.setFlags(QtCore.Qt.ItemIsEnabled)
-        self.vplantable.setItem(1, 4, item)
-        item = QtGui.QTableWidgetItem()
-        item.setFlags(QtCore.Qt.ItemIsEnabled)
         self.vplantable.setItem(1, 5, item)
         item = QtGui.QTableWidgetItem()
         item.setFlags(QtCore.Qt.ItemIsEnabled)
         self.vplantable.setItem(1, 6, item)
+        item = QtGui.QTableWidgetItem()
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self.vplantable.setItem(1, 7, item)
 
         #    NEXT ITEM for 12/1
         item = QtGui.QTableWidgetItem()
@@ -178,13 +163,13 @@ class Ui_VPlanClient():
         item = QtGui.QTableWidgetItem()
         item.setText(QtGui.QApplication.translate("VPlanClient", "A102", None, QtGui.QApplication.UnicodeUTF8))
         item.setFlags(QtCore.Qt.ItemIsEnabled)
-        self.vplantable.setItem(2, 4, item)
-        item = QtGui.QTableWidgetItem()
-        item.setFlags(QtCore.Qt.ItemIsEnabled)
         self.vplantable.setItem(2, 5, item)
         item = QtGui.QTableWidgetItem()
         item.setFlags(QtCore.Qt.ItemIsEnabled)
         self.vplantable.setItem(2, 6, item)
+        item = QtGui.QTableWidgetItem()
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self.vplantable.setItem(2, 7, item)
         
         # DATA HEADER
         item = QtGui.QTableWidgetItem()
@@ -196,7 +181,7 @@ class Ui_VPlanClient():
         font.setBold(True)
         item.setFont(font)
         self.vplantable.setItem(3, 0, item)
-        self.vplantable.setSpan(3, 0, 1, 7)
+        self.vplantable.setSpan(3, 0, 1, 9)
 
         # DATA 13/1
         item = QtGui.QTableWidgetItem()
@@ -216,14 +201,14 @@ class Ui_VPlanClient():
         self.vplantable.setItem(4, 3, item)
         item = QtGui.QTableWidgetItem()
         item.setFlags(QtCore.Qt.ItemIsEnabled)
-        self.vplantable.setItem(4, 4, item)
+        self.vplantable.setItem(4, 5, item)
         item = QtGui.QTableWidgetItem()
         item.setText(QtGui.QApplication.translate("VPlanClient", "Frei", None, QtGui.QApplication.UnicodeUTF8))
         item.setFlags(QtCore.Qt.ItemIsEnabled)
-        self.vplantable.setItem(4, 5, item)
+        self.vplantable.setItem(4, 6, item)
         item = QtGui.QTableWidgetItem()
         item.setFlags(QtCore.Qt.ItemIsEnabled)
-        self.vplantable.setItem(4, 6, item)
+        self.vplantable.setItem(4, 7, item)
 
         # DATA HEADER
         item = QtGui.QTableWidgetItem()
@@ -235,7 +220,7 @@ class Ui_VPlanClient():
         font.setBold(True)
         item.setFont(font)
         self.vplantable.setItem(5, 0, item)
-        self.vplantable.setSpan(5, 0, 1, 7)
+        self.vplantable.setSpan(5, 0, 1, 9)
 
         # DATA 13/2
         item = QtGui.QTableWidgetItem()
@@ -255,14 +240,14 @@ class Ui_VPlanClient():
         self.vplantable.setItem(6, 3, item)
         item = QtGui.QTableWidgetItem()
         item.setFlags(QtCore.Qt.ItemIsEnabled)
-        self.vplantable.setItem(6, 4, item)
+        self.vplantable.setItem(6, 5, item)
         item = QtGui.QTableWidgetItem()
         item.setText(QtGui.QApplication.translate("VPlanClient", "Frei", None, QtGui.QApplication.UnicodeUTF8))
         item.setFlags(QtCore.Qt.ItemIsEnabled)
-        self.vplantable.setItem(6, 5, item)
+        self.vplantable.setItem(6, 6, item)
         item = QtGui.QTableWidgetItem()
         item.setFlags(QtCore.Qt.ItemIsEnabled)
-        self.vplantable.setItem(6, 6, item)
+        self.vplantable.setItem(6, 7, item)
 
         # DATA END
 
