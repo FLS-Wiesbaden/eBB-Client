@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="logo">
+    <file>img/fls_logo.ico</file>
+    <file>img/fls_logo_60.png</file>
+  </qresource>
+</RCC>

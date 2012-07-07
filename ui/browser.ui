@@ -15,8 +15,8 @@
    <string>FLS Vertretungsplaner</string>
   </property>
   <property name="windowIcon">
-   <iconset>
-    <normaloff>fls_logo.ico</normaloff>fls_logo.ico</iconset>
+   <iconset resource="logos.qrc">
+    <normaloff>:/logo/fls_logo.ico</normaloff>:/logo/fls_logo.ico</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="sizePolicy">
@@ -25,7 +25,10 @@
      <verstretch>0</verstretch>
     </sizepolicy>
    </property>
-   <layout class="QVBoxLayout" name="verticalLayout_2">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <property name="margin">
+     <number>0</number>
+    </property>
     <item>
      <widget class="QWebView" name="webView">
       <property name="sizePolicy">
@@ -34,29 +37,8 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
-      <property name="url">
-       <url>
-        <string>http://simon-seyer.dyndns.org/tv/vplan</string>
-       </url>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QProgressBar" name="progressBar">
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>10</height>
-       </size>
-      </property>
-      <property name="contextMenuPolicy">
-       <enum>Qt::NoContextMenu</enum>
-      </property>
-      <property name="value">
-       <number>24</number>
-      </property>
-      <property name="textVisible">
-       <bool>false</bool>
+      <property name="renderHints">
+       <set>QPainter::HighQualityAntialiasing|QPainter::SmoothPixmapTransform|QPainter::TextAntialiasing</set>
       </property>
      </widget>
     </item>
@@ -70,23 +52,8 @@
    <header>QtWebKit/QWebView</header>
   </customwidget>
  </customwidgets>
- <resources/>
- <connections>
-  <connection>
-   <sender>webView</sender>
-   <signal>loadProgress(int)</signal>
-   <receiver>progressBar</receiver>
-   <slot>setValue(int)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>639</x>
-     <y>391</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>639</x>
-     <y>788</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <resources>
+  <include location="logos.qrc"/>
+ </resources>
+ <connections/>
 </ui>
