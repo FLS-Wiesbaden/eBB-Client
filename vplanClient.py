@@ -23,6 +23,15 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
         self.addAction(self.fullScreen)
 
+    def setActions(self):
+        self.actReload = QtGui.QAction(QtGui.QIcon(''), 'Neuladen', self)
+        self.actReload.setAutoRepeat(False)
+        self.actReload.setShortcut('F5')
+        self.actReload.setStatusTip('Neuladen')
+        self.connect(self.actReload, QtCore.SIGNAL('triggered()'), self.ui.webView.reload)
+
+        self.addAction(self.actReload)
+
     @pyqtSlot()
     def toggleScreen(self):
         if self.isFullScreen():
@@ -30,9 +39,14 @@ class VPlanMainWindow(QtGui.QMainWindow):
         else:
             self.showFullScreen()
 
+    def setUi(self, ui):
+        self.ui = ui
+
 app = QtGui.QApplication(sys.argv)
 MainWindow = VPlanMainWindow()
 ui = Ui_MainWindow()
 ui.setupUi(MainWindow)
+MainWindow.setUi(ui)
+MainWindow.setActions()
 MainWindow.showFullScreen()
 sys.exit(app.exec_())

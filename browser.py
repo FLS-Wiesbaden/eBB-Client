@@ -2,8 +2,8 @@
 
 # Form implementation generated from reading ui file 'browser.ui'
 #
-# Created: Sun Jan 29 19:39:34 2012
-#      by: PyQt4 UI code generator 4.9
+# Created: Sat Jul  7 12:22:25 2012
+#      by: PyQt4 UI code generator 4.9.4
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -28,8 +28,8 @@ class Ui_MainWindow(object):
         sizePolicy.setHeightForWidth(self.centralwidget.sizePolicy().hasHeightForWidth())
         self.centralwidget.setSizePolicy(sizePolicy)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
-        self.horizontalLayout = QtGui.QHBoxLayout(self.centralwidget)
-        self.horizontalLayout.setObjectName(_fromUtf8("horizontalLayout"))
+        self.verticalLayout_2 = QtGui.QVBoxLayout(self.centralwidget)
+        self.verticalLayout_2.setObjectName(_fromUtf8("verticalLayout_2"))
         self.webView = QtWebKit.QWebView(self.centralwidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
@@ -38,14 +38,21 @@ class Ui_MainWindow(object):
         self.webView.setSizePolicy(sizePolicy)
         self.webView.setUrl(QtCore.QUrl(_fromUtf8("http://simon-seyer.dyndns.org/tv/vplan")))
         self.webView.setObjectName(_fromUtf8("webView"))
-        self.horizontalLayout.addWidget(self.webView)
+        self.verticalLayout_2.addWidget(self.webView)
+        self.progressBar = QtGui.QProgressBar(self.centralwidget)
+        self.progressBar.setMaximumSize(QtCore.QSize(16777215, 10))
+        self.progressBar.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
+        self.progressBar.setProperty("value", 24)
+        self.progressBar.setTextVisible(False)
+        self.progressBar.setObjectName(_fromUtf8("progressBar"))
+        self.verticalLayout_2.addWidget(self.progressBar)
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)
+        QtCore.QObject.connect(self.webView, QtCore.SIGNAL(_fromUtf8("loadProgress(int)")), self.progressBar.setValue)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "FLS Vertretungsplaner", None, QtGui.QApplication.UnicodeUTF8))
 
 from PyQt4 import QtWebKit
-
