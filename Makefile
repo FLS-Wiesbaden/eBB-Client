@@ -1,20 +1,20 @@
-cacheDirs = cache __pycache__
-buildDir = build
-debugFlg = 
-uiSources := $(wildcard ui/*.ui)
-uiInputs := $(foreach i,$(uiSources),$(i))
+cacheDirs  := cache __pycache__
+buildDir   := build
+debugFlg   := 
+uiSources  := $(wildcard ui/*.ui)
+uiInputs   := $(foreach i,$(uiSources),$(i))
 qrcSources := $(wildcard res/*.qrc)
-qrcInputs := $(foreach i,$(qrcSources),$(i))
-staticPys := $(wildcard *.py *.ini)
+qrcInputs  := $(foreach i,$(qrcSources),$(i))
+staticPys  := $(wildcard *.py *.ini)
 
-all: createDir release
+all: createDir debug
 
 run: all
-	$(buildDir)/vplanClient.py
+	python3 $(buildDir)/vplanClient.py
 
 release: cpPython makeResources makeUis
 
-debug:  debugFlg = -x
+debug:  debugFlg := -x
 debug:  cpPython makeResources makeUis
 
 createDir:
