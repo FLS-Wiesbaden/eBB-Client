@@ -15,8 +15,8 @@
    <string>FLS Vertretungsplaner</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="logos.qrc">
-    <normaloff>:/logo/fls_logo.ico</normaloff>:/logo/fls_logo.ico</iconset>
+   <iconset resource="../res/logos.qrc">
+    <normaloff>:/logo/img/fls_logo.ico</normaloff>:/logo/img/fls_logo.ico</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="sizePolicy">
@@ -53,7 +53,7 @@
   </customwidget>
  </customwidgets>
  <resources>
-  <include location="logos.qrc"/>
+  <include location="../res/logos.qrc"/>
  </resources>
  <connections/>
 </ui>

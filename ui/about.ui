@@ -18,7 +18,7 @@
   </property>
   <property name="windowIcon">
    <iconset resource="logos.qrc">
-    <normaloff>:/logo/fls_logo.ico</normaloff>:/logo/fls_logo.ico</iconset>
+    <normaloff>:/logo/img/fls_logo.ico</normaloff>:/logo/img/fls_logo.ico</iconset>
   </property>
   <property name="modal">
    <bool>true</bool>
@@ -42,7 +42,7 @@
         </font>
        </property>
        <property name="text">
-        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Vertretungsplan-Client &lt;img src=&quot;:/logo/fls_logo_60.png&quot; style=&quot;float: right;&quot;/&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt; font-weight:400; font-style:italic;&quot;&gt;FLS Wiesbaden&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Vertretungsplan-Client &lt;img src=&quot;:/logo/img/fls_logo_60.png&quot; style=&quot;float: right;&quot;/&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt; font-weight:400; font-style:italic;&quot;&gt;FLS Wiesbaden&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
        </property>
        <property name="textInteractionFlags">
         <set>Qt::NoTextInteraction</set>

@@ -21,7 +21,7 @@
   </property>
   <property name="windowIcon">
    <iconset resource="logos.qrc">
-    <normaloff>:/logo/fls_logo.ico</normaloff>:/logo/fls_logo.ico</iconset>
+    <normaloff>:/logo/img/fls_logo.ico</normaloff>:/logo/img/fls_logo.ico</iconset>
   </property>
   <property name="modal">
    <bool>true</bool>
