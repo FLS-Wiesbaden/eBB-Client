@@ -8,6 +8,7 @@ from configparser import SafeConfigParser
 from PyQt4.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkDiskCache
 from PyQt4.QtWebKit import QWebPage
+from PyQt4 import QtGui
 from time import sleep
 import sys, os
 
@@ -208,6 +209,50 @@ class VPlanMainWindow(QtGui.QMainWindow):
         self.actResetZoom.setShortcut(self.config.get('shortcuts', 'resetZoom'))
         self.connect(self.actResetZoom, QtCore.SIGNAL('triggered()'), QtCore.SLOT('resetZoom()'))
         self.addAction(self.actResetZoom)
+
+        # Loading finished (bool) 
+        self.connect(self.ui.webView, QtCore.SIGNAL('loadFinished(bool)'), QtCore.SLOT('handleLoadReturn(bool)'))
+
+    @pyqtSlot(bool)
+    def handleLoadReturn(self, success):
+        if not success:
+            print('Selected Page could not be loaded.')
+            errorPage = """
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <title>Vertretungsplaner: Ladefehler</title>
+        <style type="text/css">
+            html{background:#A0A0A0}body{margin:0;padding:0 1em;color:#000;font:message-box}h1{margin:0 0 .6em 0;border-bottom:1px solid ThreeDLightShadow;font-size:160%}ul,ol{margin:0;padding:0}ul>li,ol>li{margin-bottom:.5em}ul{list-style:square}#errorPageContainer{position:relative;min-width:13em;max-width:52em;margin:4em auto;border:1px solid ThreeDShadow;border-radius:10px;padding:3em;background-color:#ffffff;background-origin:content-box}#errorShortDesc>p{overflow:auto;border-bottom:1px solid ThreeDLightShadow;padding-bottom:1em;font-size:130%;white-space:pre-wrap}#errorLongDesc{font-size:110%}#errorTryAgain{margin-top:2em;}#brand{position:absolute;right:0;bottom:-1.5em;opacity:.4}
+        </style>
+    </head>
+    <body dir="ltr">
+        <div id="errorPageContainer">
+            <div id="errorTitle">
+                <h1 id="errorTitleText">Fehler: Netzwerk-Zeitüberschreitung oder Nicht gefunden</h1>
+            </div>
+            <div id="errorLongContent">
+                <div id="errorShortDesc">
+                    <p id="errorShortDescText">Der Zentralrechner zum Aufruf der Seite braucht zu lange, um eine Antwort zu senden oder die Datei konnte nicht gefunden werden.</p>
+                </div>
+
+                <div id="errorLongDesc">
+                    <ul xmlns="http://www.w3.org/1999/xhtml">
+                        <li>Die Seite könnte vorübergehend nicht erreichbar sein, versuchen Sie es bitte 
+                        später nochmals.</li>
+                        <li>Wenn Sie auch keine andere Seite aufrufen können, überprüfen Sie bitte die 
+                        Netzwerk-/Internetverbindung.</li>
+                        <li>Wenn Ihr Rechner oder Netzwerk von einem Schutzschild oder einem Proxy geschützt wird, 
+                        stellen Sie bitte sicher, dass Firefox auf das Internet zugreifen darf.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
+            """
+            self.ui.webView.setHtml(errorPage)
+
 
     @pyqtSlot()
     def showAbout(self):
