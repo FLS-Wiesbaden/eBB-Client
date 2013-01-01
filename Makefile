@@ -6,16 +6,17 @@ uiInputs   := $(foreach i,$(uiSources),$(i))
 qrcSources := $(wildcard res/*.qrc)
 qrcInputs  := $(foreach i,$(qrcSources),$(i))
 staticPys  := $(wildcard *.py *.ini)
+staticFiles := $(wildcard certs/*)
 
 all: createDir debug
 
 run: all
 	python3 $(buildDir)/vplanClient.py
 
-release: cpPython makeResources makeUis
+release: cpPython cpStaticFiles makeResources makeUis
 
 debug:  debugFlg := -x
-debug:  cpPython makeResources makeUis
+debug:  cpPython cpStaticFiles makeResources makeUis
 
 createDir:
 	@if [ ! -d "$(buildDir)" ]; then mkdir -p $(buildDir); fi
@@ -23,6 +24,10 @@ createDir:
 cpPython:
 	cp $(staticPys) $(buildDir)/
 	chmod +x $(buildDir)/vplanClient.py
+
+cpStaticFiles:
+	mkdir -p $(buildDir)/certs/
+	cp -R $(staticFiles) $(buildDir)/certs/
 
 makeResources: $(qrcInputs)
 	@export data="$(qrcInputs)"; \
