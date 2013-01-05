@@ -12,7 +12,7 @@ from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkDiskCache
 from PyQt4.QtWebKit import QWebPage
 from PyQt4 import QtGui
 from time import sleep
-import sys, os, socket, select, uuid, signal, queue
+import sys, os, socket, select, uuid, signal, queue, random
 
 workDir = os.path.dirname(os.path.realpath(__file__))
 
@@ -43,9 +43,8 @@ class DsbServer(Process):
 	READ_WRITE = READ_ONLY | select.POLLOUT
 	TIMEOUT = 1000
 
-
 	def __init__(self):
-		Process.__init__(self)
+		Process.__init__(self, name='DsbServer')
 		# Initialize context
 		self.ctx = SSL.Context(SSL.SSLv3_METHOD)
 		self.ctx.set_options(SSL.OP_NO_SSLv2)
@@ -60,6 +59,8 @@ class DsbServer(Process):
 		self.sock = None
 		self.runState = False
 		self.data = queue.Queue()
+		self.vplanQueue = Queue()
+		self.vplanProcess = None
 		self.addData('dsb')
 		self.addData('register;mono;%i' % (uuid.getnode()))
 
@@ -69,11 +70,33 @@ class DsbServer(Process):
 			self.poller.modify(self.sock, DsbServer.READ_WRITE)
 
 	def connect(self):
+		tryNr = 0
+		wait = 1
 		self.sock = SSL.Connection(self.ctx, socket.socket(socket.AF_INET, socket.SOCK_STREAM))
-		self.sock.connect(('localhost', 8080))
+		while tryNr >= 0:
+			try:
+				self.sock.connect(('localhost', 8080))
+				tryNr = -1
+			except socket.error as e:
+				print('Connection try #%i not possible!' % (tryNr,))
+				tryNr += 1
+				wait += random.randint(10, 10 + tryNr * 3)
+				print('Waiting %i seconds!' % (wait,))
+				sleep(wait)
+
+			if tryNr >= 30:
+				print('Connection impossible!')
+				break
+
+		return True if tryNr == -1 else False
 
 	def parseCommand(self, cmd):
-		print('Got: %s' % (cmd,))
+		code, msg = cmd.decode('utf-8').split(' - ')
+		print('%s: %s' % (code, msg))
+
+		if code == '999':
+			self.vplanProcess = VPlanApplication(self.vplanQueue)
+			self.vplanProcess.start()
 
 	def waitAndClose(self):
 		print('finished!')
@@ -101,9 +124,10 @@ class DsbServer(Process):
 			sys.exit(0)
 
 	def run(self):
-		self.connect()
-		self.runState = True
+		if not self.connect():
+			return
 
+		self.runState = True
 		# sending the first request (to auth)
 		self.sock.send(self.data.get_nowait())
 		self.sock.setblocking(0)
@@ -121,7 +145,6 @@ class DsbServer(Process):
 			for fd, flag in events:
 				s = fd_to_socket[fd]
 				if flag & (select.POLLIN | select.POLLPRI):
-					print('Reading data...')
 					try:
 						newData = s.recv(4096)
 					except SSL.ZeroReturnError as e:
@@ -172,6 +195,18 @@ class DsbServer(Process):
 				self.sock.close()
 		except Exception as e:
 			print('Could not close connection: %s' % (e,))
+
+class VPlanApplication(Process):
+
+	def __init__(self, q):
+		Process.__init__(self, name='VPlanApplication')
+		self.app = QtGui.QApplication(sys.argv)
+		self.vplan = None
+		self.queue = q
+
+	def run(self):
+		self.vplan = VPlanMainWindow()
+		self.app.exec_()
 
 class VPlanAbout(QtGui.QDialog):
 	def __init__(self, parentMain):
@@ -497,6 +532,4 @@ if __name__ == "__main__":
 	ds.start()
 	ds.join()
 
-	# app = QtGui.QApplication(sys.argv)
-	# MainWindow = VPlanMainWindow()
-	# sys.exit(app.exec_())
+	
