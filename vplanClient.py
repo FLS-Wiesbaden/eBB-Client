@@ -12,7 +12,20 @@ from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkDiskCache
 from PyQt4.QtWebKit import QWebPage
 from PyQt4 import QtGui
 from time import sleep
-import sys, os, socket, select, uuid, signal, queue, random
+from ansistrm import ColorizingStreamHandler
+import sys, os, socket, select, uuid, signal, queue, random, logging
+
+__author__  = 'Lukas Schreiner'
+__copyright__ = 'Copyright (C) 2012 - 2013 Website-Team Friedrich-List-Schule-Wiesbaden'
+__version__ = '0.1'
+
+FORMAT = '%(asctime)-15s %(message)s'
+formatter = logging.Formatter(FORMAT, datefmt='%b %d %H:%M:%S')
+log = logging.getLogger()
+log.setLevel(logging.INFO)
+hdlr = ColorizingStreamHandler()
+hdlr.setFormatter(formatter)
+log.addHandler(hdlr)
 
 workDir = os.path.dirname(os.path.realpath(__file__))
 
@@ -23,7 +36,7 @@ except AttributeError:
 
 def verify_cb(conn, cert, errnum, depth, ok):
 	# This obviously has to be updated
-	print('Got certificate: %s' % cert.get_subject())
+	log.debug('Got certificate: %s' % cert.get_subject())
 
 	certIssuer = cert.get_issuer()
 	certSubject = cert.get_subject()
@@ -54,6 +67,7 @@ class DsbServer(Process):
 		self.ctx.load_verify_locations('build/certs/cacert.pem')
 		self.ctx.set_verify_depth(3)
 
+		self.config = None
 		self.exit = False
 		self.poller = None
 		self.sock = None
@@ -61,8 +75,31 @@ class DsbServer(Process):
 		self.data = queue.Queue()
 		self.vplanQueue = Queue()
 		self.vplanProcess = None
+
+		# load config
+		self.loadConfig()
+
+		# check name - use Hostname. Should be unique enough!
+		self.checkName()
+
+		# start module dsb on connect
 		self.addData('dsb')
+		# register...
 		self.addData('register;mono;%i' % (uuid.getnode()))
+
+	def loadConfig(self, conffile = os.path.join(workDir,'config.ini')):
+		self.config = SafeConfigParser()
+		self.config.read([conffile])
+
+	def checkName(self):
+		try:
+			if self.config.get('connection', '') is None:
+				pass
+			else:
+				pass
+		except:
+			pass
+
 
 	def addData(self, msg):
 		self.data.put(msg)
@@ -78,46 +115,46 @@ class DsbServer(Process):
 				self.sock.connect(('localhost', 8080))
 				tryNr = -1
 			except socket.error as e:
-				print('Connection try #%i not possible!' % (tryNr,))
+				log.warning('Connection try #%i not possible!' % (tryNr,))
 				tryNr += 1
 				wait += random.randint(10, 10 + tryNr * 3)
-				print('Waiting %i seconds!' % (wait,))
+				log.info('Waiting %i seconds!' % (wait,))
 				sleep(wait)
 
 			if tryNr >= 30:
-				print('Connection impossible!')
+				log.critical('Connection impossible!')
 				break
 
 		return True if tryNr == -1 else False
 
 	def parseCommand(self, cmd):
 		code, msg = cmd.decode('utf-8').split(' - ')
-		print('%s: %s' % (code, msg))
+		log.debug('%s: %s' % (code, msg))
 
 		if code == '999':
 			self.vplanProcess = VPlanApplication(self.vplanQueue)
 			self.vplanProcess.start()
 
 	def waitAndClose(self):
-		print('finished!')
+		log.info('finished!')
 		self.__del__()
 		sys.exit(0)
 
 	def interrupt(self, signal, frame):
-		print('requested shutdown...')
+		log.info('requested shutdown...')
 		if self.runState:
 			# delete queue.
-			print('waiting for queue clearing...')
+			log.debug('waiting for queue clearing...')
 			with self.data.mutex:
 				self.data.queue.clear()
 			# first exit dsb
-			print('added exit no. 1')
+			log.debug('added exit no. 1')
 			self.addData('exit')
 			# next exit pyTools
-			print('added exit no. 2')
+			log.debug('added exit no. 2')
 			self.addData('exit')
 			# wait until all exits are processed.
-			print('Wait for empty queue...')
+			log.debug('Wait for empty queue...')
 			self.exit = True
 		else:
 			self.__del__()
@@ -126,6 +163,8 @@ class DsbServer(Process):
 	def run(self):
 		if not self.connect():
 			return
+		else:
+			log.info('Connected to DSB Server!')
 
 		self.runState = True
 		# sending the first request (to auth)
@@ -148,21 +187,21 @@ class DsbServer(Process):
 					try:
 						newData = s.recv(4096)
 					except SSL.ZeroReturnError as e:
-						print('Connection closed!')
+						log.info('Connection closed!')
 						newData = None
 
 					if newData:
 						self.parseCommand(newData)
 						self.poller.modify(s, DsbServer.READ_WRITE)
 					else:
-						print('Disconnect...')
+						log.info('Disconnect...')
 						self.poller.unregister(s)
 						self.runState = False
 						s.shutdown(socket.SHUT_WR)
 						s.close()
 						self.sock = None
 				elif flag & select.POLLHUP:
-					print('Client hung up..')
+					log.info('Client hung up..')
 					self.poller.unregister(s)
 					s.shutdown(socket.SHUT_WR)
 					s.close()
@@ -171,17 +210,17 @@ class DsbServer(Process):
 					try:
 						nextMsg = self.data.get_nowait()
 					except queue.Empty:
-						print('output queue is empty.')
+						log.debug('output queue is empty.')
 						if self.exit:
 							self.waitAndClose()
 						else:
 							self.poller.modify(s, DsbServer.READ_ONLY)
 					else:
-						print('sending data')
+						log.debug('sending data')
 						s.send(nextMsg)
 				elif flag & select.POLLERR:
-					print('Handling exceptional condition.')
-					print('Will stop listening!')
+					log.error('Handling exceptional condition.')
+					log.info('Will stop listening!')
 					self.runState = False
 					self.poller.unregister(s)
 					s.shutdown(socket.SHUT_WR)
@@ -194,7 +233,7 @@ class DsbServer(Process):
 				self.sock.shutdown(socket.SHUT_WR)
 				self.sock.close()
 		except Exception as e:
-			print('Could not close connection: %s' % (e,))
+			log.error('Could not close connection: %s' % (e,))
 
 class VPlanApplication(Process):
 
@@ -527,6 +566,11 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 
 if __name__ == "__main__":
+	hdlr = logging.FileHandler('vclient.log')
+	hdlr.setFormatter(formatter)
+	log.addHandler(hdlr)
+	log.setLevel(logging.DEBUG)
+
 	ds = DsbServer()
 	signal.signal(signal.SIGINT, ds.interrupt)
 	ds.start()
