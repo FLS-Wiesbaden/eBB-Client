@@ -13,11 +13,12 @@ from PyQt4.QtWebKit import QWebPage
 from PyQt4 import QtGui
 from time import sleep
 from ansistrm import ColorizingStreamHandler
-import sys, os, socket, select, uuid, signal, queue, random, logging
+from observer import ObservableSubject, Observer
+from flsconfiguration import FLSConfiguration
+import sys, os, socket, select, uuid, signal, queue, random, logging, abc
 
 __author__  = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2013 Website-Team Friedrich-List-Schule-Wiesbaden'
-__version__ = '0.1'
 
 FORMAT = '%(asctime)-15s %(message)s'
 formatter = logging.Formatter(FORMAT, datefmt='%b %d %H:%M:%S')
@@ -28,6 +29,8 @@ hdlr.setFormatter(formatter)
 log.addHandler(hdlr)
 
 workDir = os.path.dirname(os.path.realpath(__file__))
+# global config
+globConfig = FLSConfiguration(os.path.join(workDir,'config.ini'))
 
 try:
 	_fromUtf8 = QtCore.QString.fromUtf8
@@ -50,7 +53,7 @@ def verify_cb(conn, cert, errnum, depth, ok):
 	else:
 		return 0
 
-class DsbServer(Process):
+class DsbServer(Process, Observer):
 	# Commonly used flag setes
 	READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
 	READ_WRITE = READ_ONLY | select.POLLOUT
@@ -58,16 +61,22 @@ class DsbServer(Process):
 
 	def __init__(self):
 		Process.__init__(self, name='DsbServer')
+		Observer.__init__(self)
+
+		# load config
+		# WE NEED globConfig!
+		self.config = globConfig
+		self.config.addObserver(self)
+
 		# Initialize context
 		self.ctx = SSL.Context(SSL.SSLv3_METHOD)
 		self.ctx.set_options(SSL.OP_NO_SSLv2)
 		self.ctx.set_verify(SSL.VERIFY_PEER|SSL.VERIFY_FAIL_IF_NO_PEER_CERT, verify_cb)
-		self.ctx.use_privatekey_file ('build/certs/dsbclient.wop.key')
-		self.ctx.use_certificate_file('build/certs/dsbclient.crt')
-		self.ctx.load_verify_locations('build/certs/cacert.pem')
-		self.ctx.set_verify_depth(3)
+		self.ctx.use_privatekey_file(self.config.get('connection', 'privKey'))
+		self.ctx.use_certificate_file(self.config.get('connection', 'pubKey'))
+		self.ctx.load_verify_locations(self.config.get('connection', 'caCert'))
+		self.ctx.set_verify_depth(self.config.getint('connection', 'verifyDepth'))
 
-		self.config = None
 		self.exit = False
 		self.poller = None
 		self.sock = None
@@ -76,30 +85,27 @@ class DsbServer(Process):
 		self.vplanQueue = Queue()
 		self.vplanProcess = None
 
-		# load config
-		self.loadConfig()
-
 		# check name - use Hostname. Should be unique enough!
 		self.checkName()
 
 		# start module dsb on connect
 		self.addData('dsb')
+		# send client version
+		self.addData('version;%s;' % (self.config.get('app', 'version'),))
 		# register...
-		self.addData('register;mono;%i' % (uuid.getnode()))
+		self.addData('register;%s;%i' % (self.config.get('connection', 'dsbName'), uuid.getnode()))
 
-	def loadConfig(self, conffile = os.path.join(workDir,'config.ini')):
-		self.config = SafeConfigParser()
-		self.config.read([conffile])
+	def notification(self, state):
+		pass
 
 	def checkName(self):
-		try:
-			if self.config.get('connection', '') is None:
-				pass
-			else:
-				pass
-		except:
+		if self.config.get('connection', 'dsbName') is None or len(self.config.get('connection', 'dsbName')) <= 0:
+			# uhh no name... thats bad.. generate something... hostname !?
+			self.config.set('connection', 'dsbName', socket.gethostname())
+			self.config.save()
+		else:
+			# we can use the config
 			pass
-
 
 	def addData(self, msg):
 		self.data.put(msg)
@@ -128,10 +134,14 @@ class DsbServer(Process):
 		return True if tryNr == -1 else False
 
 	def parseCommand(self, cmd):
-		code, msg = cmd.decode('utf-8').split(' - ')
+		code, msg, *args = cmd.decode('utf-8').split(' - ')
 		log.debug('%s: %s' % (code, msg))
 
-		if code == '999':
+		if code == '402':
+			# uhhh we have a version mismatch!
+			log.critical('Version mismatch - you need at least "%s"' % (msg,))
+			self.interrupt(None, None)
+		elif code == '999':
 			self.vplanProcess = VPlanApplication(self.vplanQueue)
 			self.vplanProcess.start()
 
@@ -149,7 +159,7 @@ class DsbServer(Process):
 				self.data.queue.clear()
 			# first exit dsb
 			log.debug('added exit no. 1')
-			self.addData('exit')
+			self.addData('exit;;')
 			# next exit pyTools
 			log.debug('added exit no. 2')
 			self.addData('exit')
@@ -250,17 +260,12 @@ class VPlanApplication(Process):
 class VPlanAbout(QtGui.QDialog):
 	def __init__(self, parentMain):
 		QtGui.QDialog.__init__(self, parent=parentMain)
-		self.config = None
-		self.loadConfig()
+		self.config = globConfig
 
 		self.ui = Ui_About()
 		self.ui.setupUi(self)
 
 		self.autostart()
-
-	def loadConfig(self, conffile = os.path.join(workDir,'config.ini')):
-		self.config = SafeConfigParser()
-		self.config.read([conffile])
 
 	def autostart(self):
 		# wait - what should i do?
@@ -276,17 +281,13 @@ class VPlanURL(QtGui.QDialog):
 	def __init__(self, parentMain):
 		QtGui.QDialog.__init__(self, parent=parentMain)
 		self.state = False
-		self.config = None
+		self.config = globConfig
 		self.loadConfig()
 
 		self.ui = Ui_VPlanURL()
 		self.ui.setupUi(self)
 
 		self.autostart()
-
-	def loadConfig(self, conffile = os.path.join(workDir,'config.ini')):
-		self.config = SafeConfigParser()
-		self.config.read([conffile])
 
 	def accept(self):
 		self.state = True
@@ -317,8 +318,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	def __init__(self):
 		QtGui.QMainWindow.__init__(self)
 		self.reloader = []
-		self.config = None;
-		self.loadConfig()
+		self.config = globConfig
 
 		self.ui = Ui_MainWindow()
 		self.ui.setupUi(self)
@@ -326,10 +326,6 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.enableCache()
 
 		self.autostart()
-
-	def loadConfig(self, conffile = os.path.join(workDir,'config.ini')):
-		self.config = SafeConfigParser()
-		self.config.read([conffile])
 
 	def reloadChild(self, widget):
 		if widget == 'webView':
