@@ -1,55 +1,50 @@
 cacheDirs  := cache __pycache__
-buildDir   := build
-debugFlg   := 
-uiSources  := $(wildcard ui/*.ui)
-uiInputs   := $(foreach i,$(uiSources),$(i))
-qrcSources := $(wildcard res/*.qrc)
-qrcInputs  := $(foreach i,$(qrcSources),$(i))
-staticPys  := $(wildcard *.py *.ini)
-staticFiles := $(wildcard certs/*)
+buildDir   = build
+debugFlg   = 
+PACKAGE = VPlanClient
+#Directory with ui and resource files
+UI_FILES = about.ui browser.ui url.ui
+RESOURCES = logos.qrc
+PYTHONS = $(wildcard $(PACKAGE)/*.py)
+RESOURCE_DIR = $(PACKAGE)/res
+UI_DIR = $(PACKAGE)/ui
+
+COMPILED_UI = $(UI_FILES:%.ui=$(buildDir)/$(PACKAGE)/ui_%.py)
+COMPILED_RESOURCES = $(RESOURCES:%.qrc=$(buildDir)/$(PACKAGE)/%_rc.py)
+COMPILED_PYTHONS = $(PYTHONS:%.py=$(buildDir)/%.py)
+
+PYUIC = pyuic4
+PYRCC = pyrcc4
 
 all: createDir debug
 
 run: all
-	python3 $(buildDir)/vplanClient.py
+	python3 $(buildDir)/$(PACKAGE)/VPlanClient.py
 
-release: cpPython cpStaticFiles makeResources makeUis
+release: pythons resources ui
 
-debug:  debugFlg := -x
-debug:  cpPython cpStaticFiles makeResources makeUis
+debug: debugFlg := -x
+debug: pythons resources ui
 
 createDir:
-	@if [ ! -d "$(buildDir)" ]; then mkdir -p $(buildDir); fi
+	@if [ ! -d "$(buildDir)/$(PACKAGE)" ]; then mkdir -p $(buildDir)/$(PACKAGE); fi
 
-cpPython:
-	cp $(staticPys) $(buildDir)/
-	chmod +x $(buildDir)/vplanClient.py
+pythons: $(COMPILED_PYTHONS)
+$(buildDir)/%.py: %.py
+	cp $< $@
+	chmod +x $@
 
-cpStaticFiles:
-	mkdir -p $(buildDir)/certs/
-	cp -R $(staticFiles) $(buildDir)/certs/
+resources: $(COMPILED_RESOURCES)  
+ui: $(COMPILED_UI)
 
-makeResources: $(qrcInputs)
-	@export data="$(qrcInputs)"; \
-	    for f in $$data; do \
-	    targetFile=`basename $$f`; \
-	    targetFile=`echo "$$targetFile" | sed -e 's/\.qrc/_rc.py/g'`; \
-	    targetFile="$(buildDir)/$$targetFile"; \
-	    echo "Making $$f to $$targetFile"; \
-	    pyrcc4 -py3 -o $$targetFile $$f; \
-	    done 
-
-makeUis: $(uiInputs)
-	@export data="$(uiInputs)"; \
-	    for f in $$data; do \
-	    targetFile=`basename $$f`; \
-	    targetFile=`echo "Ui$${targetFile^}" | sed -e 's/\.ui/.py/g'`; \
-	    targetFile="$(buildDir)/$$targetFile"; \
-	    echo "Making $$f to $$targetFile"; \
-	    pyuic4 $(debugFlg) -o $$targetFile $$f; \
-	    done
+$(buildDir)/$(PACKAGE)/ui_%.py: $(UI_DIR)/%.ui
+	$(PYUIC) $(debugFlg) $< -o $@
+ 
+$(buildDir)/$(PACKAGE)/%_rc.py: $(RESOURCE_DIR)/%.qrc
+	$(PYRCC) -py3 $< -o $@
 
 clean:
-	rm -rvf ${cacheDirs}
-	rm -rvf ${buildDir}
-
+	$(RM) -rvf $(COMPILED_UI)
+	$(RM) -rvf $(COMPILED_RESOURCES)
+	$(RM) -rvf $(COMPILED_PYTHONS)
+	$(RM) -rvf ${cacheDirs}

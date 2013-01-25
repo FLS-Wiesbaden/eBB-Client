@@ -3,7 +3,6 @@
 # Copyright (C) 2010-2012 Vinay Sajip. All rights reserved. Licensed under the new BSD license.
 #
 import logging
-import os
 
 class ColorizingStreamHandler(logging.StreamHandler):
 	# color names to indices

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from UiBrowser import *
-from UiAbout import *
-from UiUrl import *
+from ui_browser import *
+from ui_about import *
+from ui_url import *
 from Printer import Printer
 from multiprocessing import Process, Queue
 from OpenSSL import SSL
@@ -15,7 +15,8 @@ from time import sleep
 from ansistrm import ColorizingStreamHandler
 from observer import ObservableSubject, Observer
 from flsconfiguration import FLSConfiguration
-import sys, os, socket, select, uuid, signal, queue, random, logging, abc
+from threading import Lock
+import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json
 
 __author__  = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2013 Website-Team Friedrich-List-Schule-Wiesbaden'
@@ -53,14 +54,13 @@ def verify_cb(conn, cert, errnum, depth, ok):
 	else:
 		return 0
 
-class DsbServer(Process, Observer):
+class DsbServer(Observer): 
 	# Commonly used flag setes
 	READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
 	READ_WRITE = READ_ONLY | select.POLLOUT
 	TIMEOUT = 1000
 
 	def __init__(self):
-		Process.__init__(self, name='DsbServer')
 		Observer.__init__(self)
 
 		# load config
@@ -92,20 +92,18 @@ class DsbServer(Process, Observer):
 		self.addData('dsb')
 		# send client version
 		self.addData('version;%s;' % (self.config.get('app', 'version'),))
-		# register...
-		self.addData('register;%s;%i' % (self.config.get('connection', 'dsbName'), uuid.getnode()))
 
 	def notification(self, state):
 		pass
 
+	def getHostname(self):
+		return socket.gethostname()
+
 	def checkName(self):
 		if self.config.get('connection', 'dsbName') is None or len(self.config.get('connection', 'dsbName')) <= 0:
 			# uhh no name... thats bad.. generate something... hostname !?
-			self.config.set('connection', 'dsbName', socket.gethostname())
+			self.config.set('connection', 'dsbName', '%s' % (uuid.getnode(),))
 			self.config.save()
-		else:
-			# we can use the config
-			pass
 
 	def addData(self, msg):
 		self.data.put(msg)
@@ -137,13 +135,60 @@ class DsbServer(Process, Observer):
 		code, msg, *args = cmd.decode('utf-8').split(' - ')
 		log.debug('%s: %s' % (code, msg))
 
-		if code == '402':
+		# TODO: make constants for the codes similiar as in dsb.py!
+		if code == '201':
+			log.info('OK... our request is in processing but we have to wait for communication with the cms.')
+		elif code == '202' or code == '205':
+			log.info('We got a new message.')
+			# because the msg could contain " - " we have to recreate the data.
+			if len(args) > 0:
+				pMsg = ' - '.join([msg, ' - '.join([args])])
+			else:
+				pMsg = msg
+
+			self.processMessage(pMsg)
+		elif code == '203':
+			log.info('Ok. Version is up to date.')
+			# now register!
+			self.addData('register;%i;%s' % (uuid.getnode(),self.getHostname()))
+		elif code == '204':
+			self.config.set('connection', 'dsbName', msg)
+		elif code == '303':
+			log.info('Ok. Version is sufficient but there is a new version?')
+			# FIXME update the vplan client?
+			pass
+		elif code == '402':
 			# uhhh we have a version mismatch!
 			log.critical('Version mismatch - you need at least "%s"' % (msg,))
 			self.interrupt(None, None)
-		elif code == '999':
+		elif code == '622':
+			# i'm offline. Stop application!
+			self.vplanProcess.stop()
+		elif code == '625':
+			# start app
 			self.vplanProcess = VPlanApplication(self.vplanQueue)
 			self.vplanProcess.start()
+			log.debug('Process started with pid: %i (own: %i).' % (self.vplanProcess.pid, os.getpid()))
+
+	def processMessage(self, msg):
+		# let us read the json string.
+		try:
+			data = DsbMessage.fromJsonString(msg)
+			log.debug('Message logged: %s' % (msg,))
+		except ValueError as e:
+			log.critical('We got a json string which is not really json...: %s' % (msg,))
+		else:
+			# is it something we have to do or something that has to be interpreted by ebb itself?
+			if data.target == DsbMessage.TARGET_CLIENT:
+				log.debug('Message is for the client. We will proceed.')
+				pass
+			elif data.target == DsbMessage.TARGET_DSB:
+				log.debug('Message is for the dsb. We will redirect the request.')
+				# FIXME: we can notify ebb as often as we want... there will be nothing happen!!!!
+				self.vplanQueue.put(data)
+				self.vplanProcess.notify()
+			else:
+				log.warning('Target of message is unknown.')
 
 	def waitAndClose(self):
 		log.info('finished!')
@@ -238,6 +283,7 @@ class DsbServer(Process, Observer):
 					self.sock = None
 
 	def __del__(self):
+		log.error('Shutting down! ?')
 		try:
 			if self.sock is not None:
 				self.sock.shutdown(socket.SHUT_WR)
@@ -253,9 +299,16 @@ class VPlanApplication(Process):
 		self.vplan = None
 		self.queue = q
 
+	def notify(self):
+		log.debug('Uhh im notified (VPlanApplication!)')
+		while not self.queue.empty():
+			log.info('I got the message as dsb: %s' % (self.queue.get(),))
+
 	def run(self):
 		self.vplan = VPlanMainWindow()
 		self.app.exec_()
+		#import rpdb2; rpdb2.start_embedded_debugger('test')
+		log.info('eBB is shut down (PID: %i)' % (self.pid,))
 
 class VPlanAbout(QtGui.QDialog):
 	def __init__(self, parentMain):
@@ -282,7 +335,6 @@ class VPlanURL(QtGui.QDialog):
 		QtGui.QDialog.__init__(self, parent=parentMain)
 		self.state = False
 		self.config = globConfig
-		self.loadConfig()
 
 		self.ui = Ui_VPlanURL()
 		self.ui.setupUi(self)
@@ -312,7 +364,7 @@ class VPlanReloader(QThread):
 
 	def __del__(self):
 		self.exiting = True
-		self.wait()
+		self.wait() 
 
 class VPlanMainWindow(QtGui.QMainWindow):
 	def __init__(self):
@@ -324,8 +376,11 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.ui.setupUi(self)
 
 		self.enableCache()
-
 		self.autostart()
+
+	def closeEvent(self, e):
+		#import rpdb2; rpdb2.start_embedded_debugger('test')
+		pass
 
 	def reloadChild(self, widget):
 		if widget == 'webView':
@@ -560,6 +615,67 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			self.reloader.append(reloader)
 			self.connect(reloader, QtCore.SIGNAL('reloader(QString)'), self.reloadChild)
 
+class DsbMessage:
+
+	TARGET_DSB = 'dsb'
+	TARGET_CLIENT = 'client'
+
+	EVENT_CHANGE = 'change'
+	EVENT_CREATE = 'create'
+	EVENT_DELETE = 'delete'
+
+	ACTION_NEWS = 'news'
+	ACTION_VPLAN = 'vplan'
+	ACTION_ANNOUNCEMENT = 'announcement'
+	ACTION_CONFIG = 'config'
+	ACTION_REBOOT = 'reboot'
+	ACTION_SUSPEND = 'suspend'
+	ACTION_RESUME = 'resume'
+	ACTION_FIREALARM = 'firealarm'
+	ACTION_INFOSCREEN = 'infoscreen'
+
+	POSSIBLE_TARGETS = [TARGET_DSB, TARGET_CLIENT]
+	POSSIBLE_EVENTS = [EVENT_CHANGE, EVENT_CREATE, EVENT_DELETE]
+	POSSIBLE_ACTIONS = [
+		ACTION_NEWS, ACTION_VPLAN, ACTION_ANNOUNCEMENT, ACTION_CONFIG, 
+		ACTION_REBOOT, ACTION_SUSPEND, ACTION_RESUME, ACTION_FIREALARM,
+		ACTION_INFOSCREEN
+	]
+
+	def __init__(self):
+		self.target = None
+		self.event = None
+		self.action = None
+		self.id = None
+		self.value = None
+
+	def toJson(self):
+		# create dict:
+		data = {
+			'target': self.target,
+			'event': self.event,
+			'action': self.action,
+			'id': self.id,
+			'value': self.value
+		}
+		return json.dumps(data)
+
+	@classmethod
+	def fromJsonString(sh, jsonStr):
+		try:
+			arr = json.loads(jsonStr)
+		except ValueError as e:
+			raise
+		else:
+			self = sh()
+			self.target = arr['target'] if arr['target'] in DsbMessage.POSSIBLE_TARGETS else None
+			self.event = arr['event'] if arr['event'] in DsbMessage.POSSIBLE_EVENTS else None
+			self.action = arr['action'] if arr['action'] in DsbMessage.POSSIBLE_ACTIONS else None
+			self.id = arr['id']
+			self.value = arr['value']
+
+			return self
+
 
 if __name__ == "__main__":
 	hdlr = logging.FileHandler('vclient.log')
@@ -569,7 +685,5 @@ if __name__ == "__main__":
 
 	ds = DsbServer()
 	signal.signal(signal.SIGINT, ds.interrupt)
-	ds.start()
-	ds.join()
-
+	ds.run()
 	
