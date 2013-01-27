@@ -13,17 +13,21 @@ COMPILED_UI = $(UI_FILES:%.ui=$(buildDir)/$(PACKAGE)/ui_%.py)
 COMPILED_RESOURCES = $(RESOURCES:%.qrc=$(buildDir)/$(PACKAGE)/%_rc.py)
 COMPILED_PYTHONS = $(PYTHONS:%.py=$(buildDir)/%.py)
 
-PYUIC = pyuic4
+PYUIC = pyuic4-3.2
 PYRCC = pyrcc4
+PYTHON = python3.2
+PYPARM = 
 
 all: createDir debug
 
 run: all
-	python3 $(buildDir)/$(PACKAGE)/VPlanClient.py
+	$(PYTHON) $(PYPARM) $(buildDir)/$(PACKAGE)/VPlanClient.py
 
+release: PYPARM := -OO
 release: pythons resources ui
 
 debug: debugFlg := -x
+debug: PYPARM := -v
 debug: pythons resources ui
 
 createDir:

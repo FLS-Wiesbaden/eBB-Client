@@ -15,8 +15,8 @@ from time import sleep
 from ansistrm import ColorizingStreamHandler
 from observer import ObservableSubject, Observer
 from flsconfiguration import FLSConfiguration
-from threading import Lock
-import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json
+from threading import Lock, Thread
+import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, multiprocessing, atexit
 
 __author__  = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2013 Website-Team Friedrich-List-Schule-Wiesbaden'
@@ -54,14 +54,21 @@ def verify_cb(conn, cert, errnum, depth, ok):
 	else:
 		return 0
 
-class DsbServer(Observer): 
+class DsbServer(QThread):
+	sigShowEBB = pyqtSignal()
+	sigHideEBB = pyqtSignal()
+	sigNewMsg  = pyqtSignal()
+
 	# Commonly used flag setes
 	READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
 	READ_WRITE = READ_ONLY | select.POLLOUT
 	TIMEOUT = 1000
 
-	def __init__(self):
-		Observer.__init__(self)
+	def __init__(self, parent = None):
+		QThread.__init__(self, parent)
+		#Observer.__init__(self) HIDDEN dependency
+		
+		atexit.register(self.shutdown)
 
 		# load config
 		# WE NEED globConfig!
@@ -77,13 +84,11 @@ class DsbServer(Observer):
 		self.ctx.load_verify_locations(self.config.get('connection', 'caCert'))
 		self.ctx.set_verify_depth(self.config.getint('connection', 'verifyDepth'))
 
-		self.exit = False
 		self.poller = None
 		self.sock = None
 		self.runState = False
 		self.data = queue.Queue()
-		self.vplanQueue = Queue()
-		self.vplanProcess = None
+		self.events = queue.Queue()
 
 		# check name - use Hostname. Should be unique enough!
 		self.checkName()
@@ -109,6 +114,14 @@ class DsbServer(Observer):
 		self.data.put(msg)
 		if self.poller is not None:
 			self.poller.modify(self.sock, DsbServer.READ_WRITE)
+
+	@pyqtSlot()
+	def quitEBB(self):
+		self.addData('goOffline;;')
+
+	@pyqtSlot(object)
+	def addEvent(self, evt):
+		self.events.put(evt)
 
 	def connect(self):
 		tryNr = 0
@@ -161,14 +174,15 @@ class DsbServer(Observer):
 			# uhhh we have a version mismatch!
 			log.critical('Version mismatch - you need at least "%s"' % (msg,))
 			self.interrupt(None, None)
+		elif code == '621':
+			log.info('Can\'t go offline. Ignore events.')
 		elif code == '622':
+			log.info('Marked as offline. Accept close events.')
 			# i'm offline. Stop application!
-			self.vplanProcess.stop()
+			# we should have a specific things in events..
+			self.sigHideEBB.emit()
 		elif code == '625':
-			# start app
-			self.vplanProcess = VPlanApplication(self.vplanQueue)
-			self.vplanProcess.start()
-			log.debug('Process started with pid: %i (own: %i).' % (self.vplanProcess.pid, os.getpid()))
+			self.sigShowEBB.emit()
 
 	def processMessage(self, msg):
 		# let us read the json string.
@@ -184,36 +198,9 @@ class DsbServer(Observer):
 				pass
 			elif data.target == DsbMessage.TARGET_DSB:
 				log.debug('Message is for the dsb. We will redirect the request.')
-				# FIXME: we can notify ebb as often as we want... there will be nothing happen!!!!
-				self.vplanQueue.put(data)
-				self.vplanProcess.notify()
+				self.sigNewMsg.emit(data)
 			else:
 				log.warning('Target of message is unknown.')
-
-	def waitAndClose(self):
-		log.info('finished!')
-		self.__del__()
-		sys.exit(0)
-
-	def interrupt(self, signal, frame):
-		log.info('requested shutdown...')
-		if self.runState:
-			# delete queue.
-			log.debug('waiting for queue clearing...')
-			with self.data.mutex:
-				self.data.queue.clear()
-			# first exit dsb
-			log.debug('added exit no. 1')
-			self.addData('exit;;')
-			# next exit pyTools
-			log.debug('added exit no. 2')
-			self.addData('exit')
-			# wait until all exits are processed.
-			log.debug('Wait for empty queue...')
-			self.exit = True
-		else:
-			self.__del__()
-			sys.exit(0)
 
 	def run(self):
 		if not self.connect():
@@ -223,7 +210,7 @@ class DsbServer(Observer):
 
 		self.runState = True
 		# sending the first request (to auth)
-		self.sock.send(self.data.get_nowait())
+		self.sendNextRequest()
 		self.sock.setblocking(0)
 
 		self.poller = select.poll()
@@ -266,10 +253,7 @@ class DsbServer(Observer):
 						nextMsg = self.data.get_nowait()
 					except queue.Empty:
 						log.debug('output queue is empty.')
-						if self.exit:
-							self.waitAndClose()
-						else:
-							self.poller.modify(s, DsbServer.READ_ONLY)
+						self.poller.modify(s, DsbServer.READ_ONLY)
 					else:
 						log.debug('sending data')
 						s.send(nextMsg)
@@ -282,33 +266,36 @@ class DsbServer(Observer):
 					s.close()
 					self.sock = None
 
-	def __del__(self):
-		log.error('Shutting down! ?')
+	def sendNextRequest(self):
+		try:
+			nextMsg = self.data.get_nowait()
+		except queue.Empty:
+			log.debug('output queue is empty.')
+		else:
+			log.debug('sending data')
+			self.sock.send(nextMsg)
+
+	def shutdown(self):
 		try:
 			if self.sock is not None:
-				self.sock.shutdown(socket.SHUT_WR)
-				self.sock.close()
+				self.runState = False
+				# delete queue.
+				log.debug('waiting for queue clearing...')
+				with self.data.mutex:
+					self.data.queue.clear()
+				# first exit dsb
+				log.debug('added exit no. 1')
+				self.addData('exit;;')
+				self.sendNextRequest()
+				# next exit pyTools
+				log.debug('added exit no. 2')
+				self.addData('exit')
+				self.sendNextRequest()
+				# shutdown
+				#self.sock.shutdown(socket.SHUT_WR)
+				#self.sock.close(self.sock.fileno())
 		except Exception as e:
 			log.error('Could not close connection: %s' % (e,))
-
-class VPlanApplication(Process):
-
-	def __init__(self, q):
-		Process.__init__(self, name='VPlanApplication')
-		self.app = QtGui.QApplication(sys.argv)
-		self.vplan = None
-		self.queue = q
-
-	def notify(self):
-		log.debug('Uhh im notified (VPlanApplication!)')
-		while not self.queue.empty():
-			log.info('I got the message as dsb: %s' % (self.queue.get(),))
-
-	def run(self):
-		self.vplan = VPlanMainWindow()
-		self.app.exec_()
-		#import rpdb2; rpdb2.start_embedded_debugger('test')
-		log.info('eBB is shut down (PID: %i)' % (self.pid,))
 
 class VPlanAbout(QtGui.QDialog):
 	def __init__(self, parentMain):
@@ -367,10 +354,14 @@ class VPlanReloader(QThread):
 		self.wait() 
 
 class VPlanMainWindow(QtGui.QMainWindow):
+	sigQuitEBB = pyqtSignal()
+	sigEvtAdd = pyqtSignal()
+
 	def __init__(self):
 		QtGui.QMainWindow.__init__(self)
 		self.reloader = []
 		self.config = globConfig
+		self.server = None
 
 		self.ui = Ui_MainWindow()
 		self.ui.setupUi(self)
@@ -378,9 +369,22 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.enableCache()
 		self.autostart()
 
+	def start(self):
+		self.server = DsbServer(self)
+		self.server.sigShowEBB.connect(self.showEBB)
+		self.server.sigHideEBB.connect(self.hideEBB)
+		self.server.sigNewMsg.connect(self.dsbMessage)
+		self.sigEvtAdd.connect(self.server.addEvent)
+		self.sigQuitEBB.connect(self.server.quitEBB)
+		self.server.start()
+
 	def closeEvent(self, e):
-		#import rpdb2; rpdb2.start_embedded_debugger('test')
-		pass
+		# first we try to send an offline signal to server!
+		log.info('"Quit EBB" -> sending signal!')
+		self.sigQuitEBB.emit()
+
+		# we have to ignore it...
+		e.ignore()
 
 	def reloadChild(self, widget):
 		if widget == 'webView':
@@ -495,7 +499,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	@pyqtSlot(bool)
 	def handleLoadReturn(self, success):
 		if not success:
-			print('Selected Page could not be loaded.')
+			print('Selected Page could not be loaded.')msg;{"action": "config", "id": null, "target": "dsb", "value": null, "event": "change"};126483148074
 			errorPage = """
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -531,7 +535,6 @@ class VPlanMainWindow(QtGui.QMainWindow):
 </html>
 			"""
 			self.ui.webView.setHtml(errorPage)
-
 
 	@pyqtSlot()
 	def showAbout(self):
@@ -592,6 +595,21 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 		self.ui.webView.setUrl(QtCore.QUrl(_fromUtf8(url)))
 
+	@pyqtSlot()
+	def showEBB(self):
+		if self.config.getboolean('app', 'fullScreenAtStartup'):
+			self.showFullScreen()
+		else:
+			self.show()
+
+	@pyqtSlot()
+	def hideEBB(self):
+		self.hide()
+
+	@pyqtSlot(object)
+	def dsbMessage(self, msg):
+		log.debug('Got %s' % (msg,))
+
 	def autostart(self):
 		title = self.config.get('app', 'title')
 		self.setWindowTitle(QtGui.QApplication.translate("MainWindow", title, None, QtGui.QApplication.UnicodeUTF8))
@@ -600,11 +618,6 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		# enable progressbar ?
 		if self.config.getboolean('progress', 'enableBar'):
 			self.enableProgressBar()
-
-		if self.config.getboolean('app', 'fullScreenAtStartup'):
-			self.showFullScreen()
-		else:
-			self.show()
 
 		self.setBrowserZoom()
 		self.loadUrl()
@@ -676,14 +689,16 @@ class DsbMessage:
 
 			return self
 
-
 if __name__ == "__main__":
+	multiprocessing.log_to_stderr('SUBDEBUG')
 	hdlr = logging.FileHandler('vclient.log')
 	hdlr.setFormatter(formatter)
 	log.addHandler(hdlr)
 	log.setLevel(logging.DEBUG)
 
-	ds = DsbServer()
-	signal.signal(signal.SIGINT, ds.interrupt)
-	ds.run()
+	log.debug('Main PID: %i' % (os.getpid(),))	
+	app = QtGui.QApplication(sys.argv)
+	ds = VPlanMainWindow()
+	ds.start()
+	app.exec_()
 	
