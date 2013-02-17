@@ -17,7 +17,7 @@
    <enum>Qt::NoContextMenu</enum>
   </property>
   <property name="windowTitle">
-   <string>VPlan: Neue URL</string>
+   <string>eBlackboard: Neue URL</string>
   </property>
   <property name="windowIcon">
    <iconset resource="logos.qrc">

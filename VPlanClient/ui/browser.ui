@@ -12,7 +12,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>FLS Vertretungsplaner</string>
+   <string>FLS eBlackboard</string>
   </property>
   <property name="windowIcon">
    <iconset resource="../res/logos.qrc">

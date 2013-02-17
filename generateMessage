@@ -1,0 +1,21 @@
+#!/bin/sh
+TARGET=`dialog --menu "Select target"  0 0 0 "dsb" "eBB" "client" "Client" 3>&1 1>&2 2>&3 3>&-`
+EVENT=`dialog --menu "Select event"  0 0 0 "change" "Change" "create" "Create" "delete" "Delete" "trigger" "Trigger" 3>&1 1>&2 2>&3 3>&-`
+ACTION=`dialog --menu "Select action"  0 0 0 "news" "News" "vplan" "VPlan" "announcement" "Announcement" "config" "Config" "reboot" "Reboot eBB" "suspend" "Suspend eBB" "resume" "Resume eBB" "firealarm" "Firealarm" "infoscreen" "Infoscreen" "screenshot" "Screenshot" 3>&1 1>&2 2>&3 3>&-`
+ID=`dialog --inputbox 'ID' 0 0 'null' 3>&1 1>&2 2>&3 3>&-`
+VALUE=`dialog --inputbox 'Value' 0 0 'null' 3>&1 1>&2 2>&3 3>&-`
+MACHINE=`dialog --menu "Select machine"  0 0 0 "126483148074" "mono" 3>&1 1>&2 2>&3 3>&-`
+
+if [[ $ID -ne "null" ]]
+then
+    ID="'$ID'"
+fi
+
+if [[ $VALUE -ne "null" ]]
+then
+    VALUE="'$VALUE'"
+fi
+
+msg="msg;{\"action\":\"$ACTION\",\"id\":$ID,\"target\":\"$TARGET\",\"value\":$VALUE,\"event\":\"$EVENT\"};$MACHINE"
+clear
+echo $msg

@@ -14,7 +14,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Über den VPlan Client</string>
+   <string>Über den eBlackboard</string>
   </property>
   <property name="windowIcon">
    <iconset resource="logos.qrc">
@@ -42,7 +42,7 @@
         </font>
        </property>
        <property name="text">
-        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Vertretungsplan-Client &lt;img src=&quot;:/logo/img/fls_logo_60.png&quot; style=&quot;float: right;&quot;/&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt; font-weight:400; font-style:italic;&quot;&gt;FLS Wiesbaden&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;eBlackboard&lt;img src=&quot;:/logo/img/fls_logo_60.png&quot; style=&quot;float: right;&quot;/&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-size:12pt; font-weight:400; font-style:italic;&quot;&gt;Friedrich-List-Schule Wiesbaden&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
        </property>
        <property name="textInteractionFlags">
         <set>Qt::NoTextInteraction</set>

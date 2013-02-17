@@ -1,5 +1,7 @@
 from observer import ObservableSubject
-from configparser import SafeConfigParser
+from configparser import SafeConfigParser, NoSectionError
+from collections import OrderedDict
+import json
 
 class FLSConfiguration(SafeConfigParser, ObservableSubject):
 	STATE_CHANGED = 'configChanged'
@@ -10,6 +12,40 @@ class FLSConfiguration(SafeConfigParser, ObservableSubject):
 		SafeConfigParser.__init__(self)
 		self._configFile = configFile
 		self.load()
+
+	def _cleanup(self):
+		self._proxies = OrderedDict()
+		self._sections = OrderedDict()
+
+	def loadJson(self, data):
+		#import rpdb2; rpdb2.start_embedded_debugger('test')
+		newConf = SafeConfigParser()
+		try:
+			config = json.loads(data)
+		except ValueError as e:
+			raise e
+
+		try:
+			for kSec, vSec in config.items():
+				try:
+					newConf.add_section(kSec)
+				except NoSectionError:
+					pass
+
+				for kVal, vVal in vSec.items():
+					try:
+						newConf.set(kSec, kVal, str(vVal['value']))
+					except NoSectionError as e:
+						pass
+		except Exception as e:
+			import rpdb2; rpdb2.start_embedded_debugger('test')
+			print(e)
+
+		# now replace
+		self._proxies = newConf._proxies
+		self._sections = newConf._sections
+
+		self.notify(FLSConfiguration.STATE_CHANGED)
 
 	def load(self):
 		self.read([self._configFile])
