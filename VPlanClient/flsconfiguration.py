@@ -47,6 +47,16 @@ class FLSConfiguration(SafeConfigParser, ObservableSubject):
 
 		self.notify(FLSConfiguration.STATE_CHANGED)
 
+	def toJson(self):
+		cfg = {}
+
+		for sec in self.sections():
+			cfg[sec] = {}
+			for opt in self.options(sec):
+				cfg[sec][opt] = self.get(sec, opt)
+
+		return json.dumps(cfg)
+
 	def load(self):
 		self.read([self._configFile])
 		self.notify(FLSConfiguration.STATE_LOADED)

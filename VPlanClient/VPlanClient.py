@@ -180,6 +180,8 @@ class DsbServer(QThread):
 			log.warning('Dbus-File with machine id does not exist at %s' % (self.config.get('connection', 'pathMachine'),))
 
 		log.debug('Used machine id: %s' % (machineId,))
+		self.config.set('connection', 'machineId', machineId)
+
 		return machineId
 
 	def checkName(self):
@@ -350,6 +352,7 @@ class DsbServer(QThread):
 	def evtTriggerConfig(self, msg):
 		try:
 			self.config.loadJson(msg.value)
+			self.config.set('connection', 'machineId', self.getMachineID())
 			self.config.save()
 			log.info('New configuration set.')
 		except ValueError as e:
@@ -408,7 +411,7 @@ class DsbServer(QThread):
 						log.debug('output queue is empty.')
 						self.poller.modify(s, DsbServer.READ_ONLY)
 					else:
-						log.debug('sending data')
+						log.debug('sending msg %s' % (nextMsg,))
 						s.sendall(nextMsg)
 				elif flag & select.POLLERR:
 					log.error('Handling exceptional condition.')
@@ -521,21 +524,38 @@ class VPlanReloader(QThread):
 		self.exiting = True
 		self.wait() 
 
+class eBBJsHandler(QObject):
+
+	def __init__(self, config):
+		QObject.__init__(self)
+		self.config = config
+
+	@pyqtSlot()
+	def getConfig(self):
+		return self.config.toJson()
+
+	@pyqtSlot()
+	def getMachineId(self):
+		return self.config.get('connection', 'machineId')
+
 class VPlanMainWindow(QtGui.QMainWindow):
 	sigQuitEBB = pyqtSignal()
 	sigEvtAdd = pyqtSignal()
 	sigSndScrShot = pyqtSignal(QtGui.QPixmap)
 
 	NOTIFY_PAGE = "TvVplan.processMessage('{MSG}')"
+	NOTIFY_CONFIG = "TvVplan.configChanged()"
 
 	def __init__(self):
 		QtGui.QMainWindow.__init__(self)
 		self.reloader = []
 		self.config = globConfig
+		self.config.addObserver(self)
 		self.server = None
 
 		self.ui = Ui_MainWindow()
 		self.ui.setupUi(self)
+		self.ebbJsHandler = eBBJsHandler(self.config)
 
 		self.manager = QNetworkAccessManager()
 		self.webpage = QWebPage()
@@ -555,6 +575,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.sigEvtAdd.connect(self.server.addEvent)
 		self.sigQuitEBB.connect(self.server.quitEBB)
 		self.sigSndScrShot.connect(self.server.sendScreenshot)
+
 		self.server.start()
 
 	def closeEvent(self, e):
@@ -564,6 +585,12 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 		# we have to ignore it...
 		e.ignore()
+
+	def notification(self, state):
+		if state == 'configChanged':
+			# now inform ebb
+			log.info('Notifiy eBB (JS) about configuration change.')
+			self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_CONFIG)
 
 	def reloadChild(self, widget):
 		if widget == 'webView':
@@ -729,6 +756,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			self.ui.webView.setHtml(errorPage)
 		else:
 			log.debug('Selected page could be loaded.')
+			# enable js-object
+			self.ui.webView.page().mainFrame().addToJavaScriptWindowObject('ebbClient', self.ebbJsHandler)
 			self.numTry = 0
 			self.createScreenshot()
 	
