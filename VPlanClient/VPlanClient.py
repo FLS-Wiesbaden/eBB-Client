@@ -6,13 +6,13 @@ from ui_url import *
 from Printer import Printer
 from OpenSSL import SSL
 from configparser import SafeConfigParser
-from PyQt4.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, QBuffer, QByteArray, QIODevice, QMutex, QMutexLocker
+from PyQt4.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, QBuffer, QByteArray, QIODevice, QMutex, QMutexLocker, QTimer
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
 from PyQt4.QtWebKit import QWebPage
 from PyQt4 import QtGui
 from time import sleep
 from ansistrm import ColorizingStreamHandler
-from observer import ObservableSubject, Observer
+from observer import ObservableSubject, Observer, NotifyReceiver
 from flsconfiguration import FLSConfiguration
 from threading import Lock, Thread
 from io import BytesIO
@@ -123,6 +123,7 @@ class DsbMessage:
 class DsbServer(QThread):
 	sigShowEBB = pyqtSignal()
 	sigHideEBB = pyqtSignal()
+	sigQuitEBB = pyqtSignal()
 	sigNewMsg  = pyqtSignal(DsbMessage)
 	sigCrtScrShot = pyqtSignal()
 
@@ -134,9 +135,8 @@ class DsbServer(QThread):
 	def __init__(self, parent = None):
 		QThread.__init__(self, parent)
 		#Observer.__init__(self) HIDDEN dependency
+		self._notifyReceiver = NotifyReceiver(self)
 		
-		atexit.register(self.shutdown)
-
 		# load config
 		# WE NEED globConfig!
 		self.config = globConfig
@@ -165,6 +165,7 @@ class DsbServer(QThread):
 		# send client version
 		self.addData('version;%s;' % (self.config.get('app', 'version'),))
 
+	@pyqtSlot(str)
 	def notification(self, state):
 		pass
 
@@ -250,7 +251,7 @@ class DsbServer(QThread):
 		return True if tryNr == -1 else False
 
 	def parseCommand(self, cmd):
-		code, msg, *args = cmd.decode('utf-8').split(' - ')
+		code, msg, *args = cmd.decode('utf-8').rstrip().split(' - ')
 		log.debug('%s: %s' % (code, msg))
 
 		# TODO: make constants for the codes similiar as in dsb.py!
@@ -282,11 +283,17 @@ class DsbServer(QThread):
 			self.interrupt(None, None)
 		elif code == '621':
 			log.info('Can\'t go offline. Ignore events.')
+		elif code == '623':
+			# we are now in idle mode. So we will wait for commands.
+			self.sigHideEBB.emit()
 		elif code == '622':
 			log.info('Marked as offline. Accept close events.')
 			# i'm offline. Stop application!
 			# we should have a specific things in events..
 			self.sigHideEBB.emit()
+			self.addData('exit;;')
+			self.addData('exit')
+			self.sigQuitEBB.emit()
 		elif code == '625':
 			self.sigShowEBB.emit()
 
@@ -325,6 +332,8 @@ class DsbServer(QThread):
 		log.debug('Disable display.')
 		exitCode = subprocess.call(shlex.split('xset dpms force off'))
 		log.debug('Displayed turned off %s' % ('successful' if exitCode == 0 else 'with errors',))
+		log.info('Now we are suspended, we will inform the cms.')
+		self.addData('goIdle;;')
 
 	def evtTriggerResume(self, msg):
 		log.info('Resume eBB')
@@ -333,6 +342,7 @@ class DsbServer(QThread):
 		log.debug('Enable display.')
 		exitCode = subprocess.call(shlex.split('xset dpms force on'))
 		log.debug('Displayed turned on %s' % ('successful' if exitCode == 0 else 'with errors',))
+		self.addData('goOnline;;')
 
 	def evtTriggerReboot(self, msg):
 		log.info('Reboot requested.')
@@ -408,10 +418,12 @@ class DsbServer(QThread):
 					try:
 						nextMsg = self.data.get_nowait()
 					except queue.Empty:
-						log.debug('output queue is empty.')
 						self.poller.modify(s, DsbServer.READ_ONLY)
-					else:
-						log.debug('sending msg %s' % (nextMsg,))
+					else: 
+						if not nextMsg.startswith('screenshot'):
+							log.debug('sending msg %s' % (nextMsg,))
+						elif nextMsg == 'screenshot;eof;':
+							log.debug('sending a screenshot.')
 						s.sendall(nextMsg)
 				elif flag & select.POLLERR:
 					log.error('Handling exceptional condition.')
@@ -514,6 +526,7 @@ class VPlanReloader(QThread):
 	def pageLoaded(self, state):
 		self.lock = False
 
+	@pyqtSlot(str)
 	def notification(self, state):
 		if state == 'configChanged':
 			self.reloadTime = globConfig.get('browser', 'reloadEvery')
@@ -548,10 +561,18 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 	def __init__(self):
 		QtGui.QMainWindow.__init__(self)
+		self._notifyReceiver = NotifyReceiver(self)
 		self.reloader = []
 		self.config = globConfig
 		self.config.addObserver(self)
 		self.server = None
+		self.timer = None
+
+		# our screenshot timer.
+		self.scrShotTimer = QTimer()
+		self.scrShotTimer.setSingleShot(False)
+		self.scrShotTimer.setInterval(self.config.getint('options', 'scrShotInterval')*1000)
+		self.scrShotTimer.timeout.connect(self.createScreenshot)
 
 		self.ui = Ui_MainWindow()
 		self.ui.setupUi(self)
@@ -570,6 +591,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.server = DsbServer(self)
 		self.server.sigShowEBB.connect(self.showEBB)
 		self.server.sigHideEBB.connect(self.hideEBB)
+		self.server.sigQuitEBB.connect(self.quitEBB)
 		self.server.sigNewMsg.connect(self.dsbMessage)
 		self.server.sigCrtScrShot.connect(self.createScreenshot)
 		self.sigEvtAdd.connect(self.server.addEvent)
@@ -586,11 +608,33 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		# we have to ignore it...
 		e.ignore()
 
+	@pyqtSlot()
+	def quitEBB(self):
+		self.scrShotTimer.stop()
+		log.info('Quitting eBB. Wait 5 sec. for communication with pyTools.')
+		# wait 5 sec!
+		self.timer = QTimer()
+		self.timer.setInterval(5000)
+		self.timer.setSingleShot(True)
+		self.timer.timeout.connect(self.quitHard)
+		self.timer.start()
+
+	def quitHard(self):
+		log.info('Quit hard now!')
+		self.server.runState = False
+		self.server = None
+		QtGui.QApplication.quit()
+
+	@pyqtSlot(str)
 	def notification(self, state):
 		if state == 'configChanged':
 			# now inform ebb
 			log.info('Notifiy eBB (JS) about configuration change.')
 			self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_CONFIG)
+
+			# changed the url?
+			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url():
+				self.loadUrl()
 
 	def reloadChild(self, widget):
 		if widget == 'webView':
@@ -831,8 +875,9 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		if url is None:
 			url = self.config.get('app', 'url')
 
+		log.info('Call %s' % (url,))
 		self.numTry = 0
-		self.ui.webView.load(QNetworkRequest(QtCore.QUrl(_fromUtf8(url))))
+		self.ui.webView.page().mainFrame().load(QNetworkRequest(QtCore.QUrl(_fromUtf8(url))))
 
 	@pyqtSlot()
 	def showEBB(self):
@@ -840,9 +885,12 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			self.showFullScreen()
 		else:
 			self.show()
+		self.scrShotTimer.start()
 
 	@pyqtSlot()
 	def hideEBB(self):
+		# stop scrshot!
+		self.scrShotTimer.stop()
 		self.hide()
 
 	@pyqtSlot()
