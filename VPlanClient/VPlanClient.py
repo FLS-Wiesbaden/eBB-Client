@@ -234,8 +234,7 @@ class DsbServer(QThread):
 		self.sock = SSL.Connection(self.ctx, socket.socket(socket.AF_INET, socket.SOCK_STREAM))
 		while tryNr >= 0:
 			try:
-				# FIXME: configurable!!!
-				self.sock.connect(('localhost', 8080))
+				self.sock.connect((self.config.get('connection', 'host'), self.config.getint('connection', 'port')))
 				tryNr = -1
 			except socket.error as e:
 				log.warning('Connection try #%i not possible!' % (tryNr,))
