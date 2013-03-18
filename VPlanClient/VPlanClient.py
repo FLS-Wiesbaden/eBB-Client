@@ -222,8 +222,8 @@ class DsbServer(QThread):
 		data = Struct('%is'%(len(data),)).pack(data)
 		data = binascii.hexlify(data).decode('utf-8')
 		i = 0
-		for pos in range(0, len(data), 3072):
-			self.addData('screenshot;%i;%s' % (i, data[pos:pos+3072]))
+		for pos in range(0, len(data), 2048):
+			self.addData('screenshot;%i;%s' % (i, data[pos:pos+2048]))
 			i += 1
 
 		self.addData('screenshot;eof;')
@@ -549,6 +549,10 @@ class eBBJsHandler(QObject):
 	@pyqtSlot()
 	def getMachineId(self):
 		return self.config.get('connection', 'machineId')
+
+	@pyqtSlot(str)
+	def logD(self, msg):
+		log.debug(msg)
 
 	@pyqtSlot(str)
 	def logI(self, msg):
