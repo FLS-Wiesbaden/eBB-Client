@@ -141,6 +141,7 @@ class DsbServer(QThread):
 		# WE NEED globConfig!
 		self.config = globConfig
 		self.config.addObserver(self)
+		self.scrshotSend = True
 
 		# Initialize context
 		self.ctx = SSL.Context(SSL.SSLv23_METHOD)
@@ -206,27 +207,29 @@ class DsbServer(QThread):
 
 	@pyqtSlot(QtGui.QPixmap)
 	def sendScreenshot(self, scrshot):
-		# Save QPixmap to QByteArray via QBuffer.
-		byte_array = QByteArray()
-		iobuffer = QBuffer(byte_array)
-		iobuffer.open(QIODevice.WriteOnly)
-		scrshot.save(iobuffer, 'PNG')
+		if self.scrshotSend is True:
+			self.scrshotSend = False
+			# Save QPixmap to QByteArray via QBuffer.
+			byte_array = QByteArray()
+			iobuffer = QBuffer(byte_array)
+			iobuffer.open(QIODevice.WriteOnly)
+			scrshot.save(iobuffer, 'PNG')
 
-		# Read QByteArray containing PNG into a StringIO.
-		string_io = BytesIO(byte_array)
-		string_io.seek(0)
-		data = zlib.compress(string_io.getvalue(), 9)
-		
-		self.addData('screenshot;chksum;%i:%s' % (len(data),sha512(data).hexdigest()))
+			# Read QByteArray containing PNG into a StringIO.
+			string_io = BytesIO(byte_array)
+			string_io.seek(0)
+			data = zlib.compress(string_io.getvalue(), 9)
+			
+			self.addData('screenshot;chksum;%i:%s' % (len(data),sha512(data).hexdigest()))
 
-		data = Struct('%is'%(len(data),)).pack(data)
-		data = binascii.hexlify(data).decode('utf-8')
-		i = 0
-		for pos in range(0, len(data), 2048):
-			self.addData('screenshot;%i;%s' % (i, data[pos:pos+2048]))
-			i += 1
+			data = Struct('%is'%(len(data),)).pack(data)
+			data = binascii.hexlify(data).decode('utf-8')
+			i = 0
+			for pos in range(0, len(data), 2048):
+				self.addData('screenshot;%i;%s' % (i, data[pos:pos+2048]))
+				i += 1
 
-		self.addData('screenshot;eof;')
+			self.addData('screenshot;eof;')
 
 	def connect(self):
 		tryNr = 0
@@ -422,6 +425,7 @@ class DsbServer(QThread):
 						if not nextMsg.startswith('screenshot'):
 							log.debug('sending msg %s' % (nextMsg,))
 						elif nextMsg == 'screenshot;eof;':
+							self.scrshotSend = True
 							log.debug('sending a screenshot.')
 						s.sendall(nextMsg)
 				elif flag & select.POLLERR:
