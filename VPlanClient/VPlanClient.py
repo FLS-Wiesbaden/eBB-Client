@@ -9,7 +9,7 @@ from configparser import SafeConfigParser
 from PyQt4.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, QBuffer, QByteArray, QIODevice, QMutex, QMutexLocker, QTimer
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
 from PyQt4.QtWebKit import QWebPage
-from PyQt4 import QtGui
+from PyQt4 import QtGui, QtWebKit
 from time import sleep
 from ansistrm import ColorizingStreamHandler
 from observer import ObservableSubject, Observer, NotifyReceiver
@@ -550,6 +550,18 @@ class eBBJsHandler(QObject):
 	def getMachineId(self):
 		return self.config.get('connection', 'machineId')
 
+	@pyqtSlot(str)
+	def logI(self, msg):
+		log.info(msg)
+
+	@pyqtSlot(str)
+	def logW(self, msg):
+		log.warning(msg)
+
+	@pyqtSlot(str)
+	def logE(self, msg):
+		log.error(msg)
+
 class VPlanMainWindow(QtGui.QMainWindow):
 	sigQuitEBB = pyqtSignal()
 	sigEvtAdd = pyqtSignal()
@@ -566,6 +578,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.config.addObserver(self)
 		self.server = None
 		self.timer = None
+		self.inspector = None
 
 		# our screenshot timer.
 		self.scrShotTimer = QTimer()
@@ -579,8 +592,10 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 		self.manager = QNetworkAccessManager()
 		self.webpage = QWebPage()
-		self.ui.webView.setPage(self.webpage)
 		self.webpage.setNetworkAccessManager(self.manager)
+		self.ui.webView.setPage(self.webpage)
+		if self.config.get('options', 'debug'):
+			self.ui.webView.settings().setAttribute(QtWebKit.QWebSettings.DeveloperExtrasEnabled, True)
 
 		self.enableCache()
 		self.enableProxy()
@@ -752,6 +767,12 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.connect(self.actResetZoom, QtCore.SIGNAL('triggered()'), QtCore.SLOT('resetZoom()'))
 		self.addAction(self.actResetZoom)
 
+		# start debugger
+		self.actStartDebug = QtGui.QAction(QtGui.QIcon(''), 'Debugger starten', self)
+		self.actStartDebug.setShortcut(self.config.get('shortcuts', 'debugConsole'))
+		self.connect(self.actStartDebug, QtCore.SIGNAL('triggered()'), QtCore.SLOT('startDebug()'))
+		self.addAction(self.actStartDebug)
+
 		# Loading finished (bool) 
 		self.connect(self.ui.webView, QtCore.SIGNAL('loadFinished(bool)'), QtCore.SLOT('handleLoadReturn(bool)'))
 
@@ -864,6 +885,17 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	def resetZoom(self):
 		self.setBrowserZoom()
 
+	@pyqtSlot()
+	def startDebug(self):
+		if self.config.get('options', 'debug'):
+			if self.inspector is None:
+				self.inspector = QtWebKit.QWebInspector()
+				self.inspector.setPage(self.ui.webView.page())
+				self.inspector.show()
+			elif self.inspector is not None:
+				if self.inspector.close():
+					self.inspector = None
+
 	def setBrowserZoom(self, zoom = None):
 		if zoom is None:
 			zoom = self.config.getfloat('browser', 'zoomFactor')
@@ -884,7 +916,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			self.showFullScreen()
 		else:
 			self.show()
-		self.scrShotTimer.start()
+		if self.config.getint('options', 'scrShotInterval'):
+			self.scrShotTimer.start()
 
 	@pyqtSlot()
 	def hideEBB(self):
@@ -894,10 +927,14 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 	@pyqtSlot()
 	def createScreenshot(self):
-		scrShot = QtGui.QPixmap.grabWidget(self)
-		if self.config.getint('options', 'scrShotSize') > 0:
-			scrShot = scrShot.scaledToWidth(self.config.getint('options', 'scrShotSize'))
-		self.sigSndScrShot.emit(scrShot)
+		if self.server.runState and self.isVisible():
+			log.debug('Create screenshot')
+			scrShot = QtGui.QPixmap.grabWidget(self)
+			if self.config.getint('options', 'scrShotSize') > 0:
+				scrShot = scrShot.scaledToWidth(self.config.getint('options', 'scrShotSize'))
+			self.sigSndScrShot.emit(scrShot)
+		else:
+			log.debug('Screenshot canceled.')
 
 	@pyqtSlot(DsbMessage)
 	def dsbMessage(self, msg):
@@ -920,7 +957,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		if self.config.getint('browser', 'reloadEvery') > 0:
 			reloader = VPlanReloader('webView', self.config.getint('browser', 'reloadEvery'))
 			self.config.addObserver(reloader)
-			self.reloader.append(reloader)
+			selft.reloader.append(reloader)
 			self.connect(reloader, QtCore.SIGNAL('reloader(QString)'), self.reloadChild)
 			self.ui.webView.loadFinished.connect(reloader.pageLoaded)
 
