@@ -35,6 +35,7 @@ log.addHandler(hdlr)
 workDir = os.path.dirname(os.path.realpath(__file__))
 # global config
 globConfig = FLSConfiguration(os.path.join(workDir,'config.ini'))
+flsConfig = FLSConfiguration()
 
 try:
 	_fromUtf8 = QtCore.QString.fromUtf8
@@ -141,6 +142,8 @@ class DsbServer(QThread):
 		# WE NEED globConfig!
 		self.config = globConfig
 		self.config.addObserver(self)
+		self.flsConfig = flsConfig
+		self.flsConfig.addObserver(self)
 		self.scrshotSend = True
 
 		# Initialize context
@@ -359,14 +362,21 @@ class DsbServer(QThread):
 
 	def evtCreateScreenshot(self, msg):
 		log.info('Create screenshot requested.')
+		self.addData('ack;;')
 		self.sigCrtScrShot.emit()
 
 	def evtTriggerConfig(self, msg):
+		self.addData('ack;;')
 		try:
-			self.config.loadJson(msg.value)
-			self.config.set('connection', 'machineId', self.getMachineID())
-			self.config.save()
-			log.info('New configuration set.')
+			if msg.id == 'ebb':
+				self.config.loadJson(msg.value)
+				self.config.set('connection', 'machineId', self.getMachineID())
+				self.config.save()
+				log.info('New ebb configuration set.')
+			elif msg.id == 'fls':
+				self.flsConfig.loadJson(msg.value)
+				self.flsConfig.save()
+				log.info('New fls configuration set.')
 		except ValueError as e:
 			log.error('Got wrong configuration string!')
 
@@ -542,13 +552,18 @@ class VPlanReloader(QThread):
 
 class eBBJsHandler(QObject):
 
-	def __init__(self, config):
+	def __init__(self, config, flscfg):
 		QObject.__init__(self)
 		self.config = config
+		self.flsConfig = flscfg
 
 	@pyqtSlot()
 	def getConfig(self):
 		return self.config.toJson()
+
+	@pyqtSlot()
+	def getFlsConfig(self):
+		return self.flsConfig.toJson()
 
 	@pyqtSlot()
 	def getMachineId(self):
@@ -584,6 +599,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.reloader = []
 		self.config = globConfig
 		self.config.addObserver(self)
+		self.flsConfig = globConfig
+		#self.flsConfig.addObserver(self)
 		self.server = None
 		self.timer = None
 		self.inspector = None
@@ -596,7 +613,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 		self.ui = Ui_MainWindow()
 		self.ui.setupUi(self)
-		self.ebbJsHandler = eBBJsHandler(self.config)
+		self.ebbJsHandler = eBBJsHandler(self.config, self.flsConfig)
 
 		self.manager = QNetworkAccessManager()
 		self.webpage = QWebPage()

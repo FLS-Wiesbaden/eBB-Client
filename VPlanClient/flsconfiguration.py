@@ -7,11 +7,12 @@ class FLSConfiguration(SafeConfigParser, ObservableSubject):
 	STATE_CHANGED = 'configChanged'
 	STATE_LOADED  = 'configLoaded'
 
-	def __init__(self, configFile):
+	def __init__(self, configFile = None):
 		ObservableSubject.__init__(self)
 		SafeConfigParser.__init__(self)
 		self._configFile = configFile
-		self.load()
+		if self._configFile is not None:
+			self.load()
 
 	def _cleanup(self):
 		self._proxies = OrderedDict()
@@ -38,7 +39,7 @@ class FLSConfiguration(SafeConfigParser, ObservableSubject):
 					except NoSectionError as e:
 						pass
 		except Exception as e:
-			import rpdb2; rpdb2.start_embedded_debugger('test')
+			#import rpdb2; rpdb2.start_embedded_debugger('test')
 			print(e)
 
 		# now replace
@@ -58,12 +59,14 @@ class FLSConfiguration(SafeConfigParser, ObservableSubject):
 		return json.dumps(cfg)
 
 	def load(self):
-		self.read([self._configFile])
-		self.notify(FLSConfiguration.STATE_LOADED)
+		if self._configFile is not None:
+			self.read([self._configFile])
+			self.notify(FLSConfiguration.STATE_LOADED)
 
 	def save(self):
-		with open(self._configFile, 'w') as f:
-			self.write(f)
+		if self._configFile is not None:
+			with open(self._configFile, 'w') as f:
+				self.write(f)
 
-		# uhh we notify about changes!
-		self.notify(FLSConfiguration.STATE_CHANGED)
+			# uhh we notify about changes!
+			self.notify(FLSConfiguration.STATE_CHANGED)
