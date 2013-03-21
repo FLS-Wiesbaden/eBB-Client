@@ -148,7 +148,7 @@ class DsbServer(QThread):
 
 		# Initialize context
 		self.ctx = SSL.Context(SSL.SSLv23_METHOD)
-		self.ctx.set_options(SSL.OP_NO_SSLv2)
+		self.ctx.set_options(SSL.OP_NO_SSLv2|SSL.OP_NO_TLSv1)
 		self.ctx.set_verify(SSL.VERIFY_PEER|SSL.VERIFY_FAIL_IF_NO_PEER_CERT, verify_cb)
 		self.ctx.use_privatekey_file(self.config.get('connection', 'privKey'))
 		self.ctx.use_certificate_file(self.config.get('connection', 'pubKey'))
@@ -406,9 +406,21 @@ class DsbServer(QThread):
 				if flag & (select.POLLIN | select.POLLPRI):
 					try:
 						newData = s.recv(4096)
-					except SSL.ZeroReturnError as e:
-						log.info('Connection closed!')
+					except SSL.SysCallError as e:
+						log.error('error occurred while reading (SysCallError): %s' % (e,))
 						newData = None
+					except SSL.ZeroReturnError as e:
+						log.info('Connection closed (ZeroReturnError): %s!' % (e,))
+						newData = None
+					except SSL.WantReadError as e:
+						log.error('error occurred while reading (WantReadError): %s' % (e,))
+					except SSL.WantWriteError as e:
+						log.error('error occurred while reading (WantWriteError): %s' % (e,))
+					except SSL.WantX509LookupError as e:
+						log.error('error occurred while reading (WantX509LookupError): %s' % (e,))
+					except SSL.Error as e:
+						# maybe client does not use ssl
+						log.error('error occurred while reading (ssl error): %s' % (e,))
 
 					if newData:
 						self.parseCommand(newData)
@@ -848,7 +860,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			# enable js-object
 			self.ui.webView.page().mainFrame().addToJavaScriptWindowObject('ebbClient', self.ebbJsHandler)
 			self.numTry = 0
-			self.createScreenshot()
+			#self.createScreenshot()
 	
 	@pyqtSlot(QNetworkReply, QAuthenticator)
 	def setBasicAuth(self, reply, auth):
@@ -959,7 +971,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 				scrShot = scrShot.scaledToWidth(self.config.getint('options', 'scrShotSize'))
 			self.sigSndScrShot.emit(scrShot)
 		else:
-			log.debug('Screenshot canceled.')
+			log.debug('Screenshot canceled (runState: %s ; Visiable: %s).' % (self.server.runState, self.isVisible()))
 
 	@pyqtSlot(DsbMessage)
 	def dsbMessage(self, msg):
