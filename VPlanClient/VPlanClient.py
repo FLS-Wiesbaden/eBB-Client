@@ -145,6 +145,7 @@ class DsbServer(QThread):
 		self.flsConfig = flsConfig
 		self.flsConfig.addObserver(self)
 		self.scrshotSend = True
+		self.machineId = None
 
 		# Initialize context
 		self.ctx = SSL.Context(SSL.SSLv23_METHOD)
@@ -177,17 +178,19 @@ class DsbServer(QThread):
 		return socket.gethostname()
 
 	def getMachineID(self):
-		machineId = uuid.getnode()
-		try:
-			with open(self.config.get('connection', 'pathMachine'), 'rb') as f:
-				machineId = f.read().strip().decode('utf-8')
-		except Exception as e:
-			log.warning('Dbus-File with machine id does not exist at %s' % (self.config.get('connection', 'pathMachine'),))
+		if self.machineId is not None:
+			machineId = uuid.getnode()
+			try:
+				with open(self.config.get('connection', 'pathMachine'), 'rb') as f:
+					machineId = f.read().strip().decode('utf-8')
+			except Exception as e:
+				log.warning('Dbus-File with machine id does not exist at %s' % (self.config.get('connection', 'pathMachine'),))
 
-		log.debug('Used machine id: %s' % (machineId,))
-		self.config.set('connection', 'machineId', machineId)
+			log.debug('Used machine id: %s' % (machineId,))
+			self.config.set('connection', 'machineId', machineId)
+			self.machineId = machineId
 
-		return machineId
+		return self.machineId
 
 	def checkName(self):
 		if self.config.get('connection', 'dsbName') is None or len(self.config.get('connection', 'dsbName')) <= 0:
