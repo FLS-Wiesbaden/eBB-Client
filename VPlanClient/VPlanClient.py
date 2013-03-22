@@ -644,7 +644,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.webpage = QWebPage()
 		self.webpage.setNetworkAccessManager(self.manager)
 		self.ui.webView.setPage(self.webpage)
-		if self.config.get('options', 'debug'):
+		if self.config.get('debug', 'enabled'):
 			self.ui.webView.settings().setAttribute(QtWebKit.QWebSettings.DeveloperExtrasEnabled, True)
 		# enable js-object
 		self.ui.webView.page().mainFrame().addToJavaScriptWindowObject('ebbClient', self.ebbJsHandler)
@@ -943,7 +943,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 	@pyqtSlot()
 	def startDebug(self):
-		if self.config.get('options', 'debug'):
+		if self.config.get('debug', 'enabled'):
 			if self.inspector is None:
 				self.inspector = QtWebKit.QWebInspector()
 				self.inspector.setPage(self.ui.webView.page())
