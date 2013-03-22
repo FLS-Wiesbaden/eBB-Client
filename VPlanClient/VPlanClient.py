@@ -211,6 +211,10 @@ class DsbServer(QThread):
 	def addEvent(self, evt):
 		self.events.put(evt)
 
+	@pyqtSlot(str)
+	def changeMode(self, mode):
+		self.addData('mode;%s;' % (mode,))
+
 	@pyqtSlot(QtGui.QPixmap)
 	def sendScreenshot(self, scrshot):
 		if self.scrshotSend is True:
@@ -566,6 +570,7 @@ class VPlanReloader(QThread):
 		self.wait() 
 
 class eBBJsHandler(QObject):
+	sigModeChanged = pyqtSignal(str)
 
 	def __init__(self, config, flscfg):
 		QObject.__init__(self)
@@ -583,6 +588,11 @@ class eBBJsHandler(QObject):
 	@pyqtSlot()
 	def getMachineId(self):
 		return self.config.get('connection', 'machineId')
+
+	@pyqtSlot(str)
+	def modeChanged(self, mode):
+		self.sigModeChanged.emit(mode)
+		log.info('Mode changed: %s' % (mode,))
 
 	@pyqtSlot(str)
 	def logD(self, msg):
@@ -636,6 +646,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.ui.webView.setPage(self.webpage)
 		if self.config.get('options', 'debug'):
 			self.ui.webView.settings().setAttribute(QtWebKit.QWebSettings.DeveloperExtrasEnabled, True)
+		# enable js-object
+		self.ui.webView.page().mainFrame().addToJavaScriptWindowObject('ebbClient', self.ebbJsHandler)
 
 		self.enableCache()
 		self.enableProxy()
@@ -651,6 +663,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.sigEvtAdd.connect(self.server.addEvent)
 		self.sigQuitEBB.connect(self.server.quitEBB)
 		self.sigSndScrShot.connect(self.server.sendScreenshot)
+		self.ui.webView.page().mainFrame().javaScriptWindowObjectCleared.connect(self.attachJsObj)
+		self.ebbJsHandler.sigModeChanged.connect(self.server.changeMode)
 
 		self.server.start()
 
@@ -689,6 +703,10 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			# changed the url?
 			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url():
 				self.loadUrl()
+
+	@pyqtSlot()
+	def attachJsObj(self):
+		self.ui.webView.page().mainFrame().addToJavaScriptWindowObject('ebbClient', self.ebbJsHandler)
 
 	def reloadChild(self, widget):
 		if widget == 'webView':
@@ -860,10 +878,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			self.ui.webView.setHtml(errorPage)
 		else:
 			log.debug('Selected page could be loaded.')
-			# enable js-object
-			self.ui.webView.page().mainFrame().addToJavaScriptWindowObject('ebbClient', self.ebbJsHandler)
 			self.numTry = 0
-			#self.createScreenshot()
+			self.createScreenshot()
 	
 	@pyqtSlot(QNetworkReply, QAuthenticator)
 	def setBasicAuth(self, reply, auth):
