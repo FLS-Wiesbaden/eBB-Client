@@ -6,7 +6,7 @@ from ui_url import *
 from Printer import Printer
 from OpenSSL import SSL
 from configparser import SafeConfigParser
-from PyQt4.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, QBuffer, QByteArray, QIODevice, QMutex, QMutexLocker, QTimer
+from PyQt4.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice, QMutex, QMutexLocker, QTimer
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
 from PyQt4.QtWebKit import QWebPage
 from PyQt4 import QtGui, QtWebKit
@@ -574,20 +574,21 @@ class eBBJsHandler(QObject):
 
 	def __init__(self, config, flscfg):
 		QObject.__init__(self)
-		self.config = config
+		self.ebbConfig = config
 		self.flsConfig = flscfg
 
-	@pyqtSlot()
-	def getConfig(self):
-		return self.config.toJson()
+	def _config(self):
+		return self.ebbConfig.toJson()
 
-	@pyqtSlot()
-	def getFlsConfig(self):
+	def _flsConfig(self):
 		return self.flsConfig.toJson()
 
-	@pyqtSlot()
-	def getMachineId(self):
+	def _machineId(self):
 		return self.config.get('connection', 'machineId')
+
+	config = pyqtProperty(str, fget=_config)
+	flscfg = pyqtProperty(str, fget=_flsConfig)
+	machineId = pyqtProperty(str, fget=_machineId)
 
 	@pyqtSlot(str)
 	def modeChanged(self, mode):
