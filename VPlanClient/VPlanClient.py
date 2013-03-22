@@ -178,7 +178,7 @@ class DsbServer(QThread):
 		return socket.gethostname()
 
 	def getMachineID(self):
-		if self.machineId is not None:
+		if self.machineId is None:
 			machineId = uuid.getnode()
 			try:
 				with open(self.config.get('connection', 'pathMachine'), 'rb') as f:
