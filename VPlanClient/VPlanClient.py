@@ -148,7 +148,7 @@ class DsbServer(QThread):
 		self.machineId = None
 
 		# Initialize context
-		self.ctx = SSL.Context(SSL.SSLv23_METHOD)
+		self.ctx = SSL.Context(SSL.SSLv3_METHOD)
 		self.ctx.set_options(SSL.OP_NO_SSLv2|SSL.OP_NO_TLSv1)
 		self.ctx.set_verify(SSL.VERIFY_PEER|SSL.VERIFY_FAIL_IF_NO_PEER_CERT, verify_cb)
 		self.ctx.use_privatekey_file(self.config.get('connection', 'privKey'))
