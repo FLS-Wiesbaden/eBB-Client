@@ -530,6 +530,7 @@ class VPlanAbout(QtGui.QDialog):
 		self.ui.textVersionQt.setText(
 				'PyQt-Version: %s / Qt-Version: %s' % (QtCore.PYQT_VERSION_STR, QtCore.QT_VERSION_STR)
 		)
+		self.ui.textVersionPy.setText(sys.version)
 
 		self.show()
 
@@ -662,6 +663,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.server = None
 		self.timer = None
 		self.inspector = None
+		self.loaded = False
 
 		# our screenshot timer.
 		self.scrShotTimer = QTimer()
@@ -714,10 +716,10 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	@pyqtSlot()
 	def quitEBB(self):
 		self.scrShotTimer.stop()
-		log.info('Quitting eBB. Wait 5 sec. for communication with pyTools.')
-		# wait 5 sec!
+		log.info('Quitting eBB. Wait 2 sec. for communication with pyTools.')
+		# wait 2 sec!
 		self.timer = QTimer()
-		self.timer.setInterval(5000)
+		self.timer.setInterval(2000)
 		self.timer.setSingleShot(True)
 		self.timer.timeout.connect(self.quitHard)
 		self.timer.start()
@@ -732,7 +734,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	def notification(self, state):
 		if state == 'configChanged':
 			# changed the url?
-			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url().toString():
+			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url().toString() \
+					and self.loaded:
 				self.loadUrl()
 			elif self.ebbJsHandler.ready:
 				# now inform ebb
@@ -1014,6 +1017,10 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		if self.config.getint('options', 'scrShotInterval'):
 			self.scrShotTimer.start()
 
+		if not self.loaded:
+			self.loaded = True
+			self.loadUrl()
+
 		exitCode  = subprocess.call(shlex.split('xset s noblank'))
 		exitCode += subprocess.call(shlex.split('xset s noexpose'))
 		exitCode += subprocess.call(shlex.split('xset s off'))
@@ -1056,7 +1063,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			self.enableProgressBar()
 
 		self.setBrowserZoom()
-		self.loadUrl()
+		#self.loadUrl()
 
 		# reload regulary?
 		if self.config.getint('browser', 'reloadEvery') > 0:

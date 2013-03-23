@@ -13,7 +13,7 @@ COMPILED_UI = $(UI_FILES:%.ui=$(buildDir)/$(PACKAGE)/ui_%.py)
 COMPILED_RESOURCES = $(RESOURCES:%.qrc=$(buildDir)/$(PACKAGE)/%_rc.py)
 COMPILED_PYTHONS = $(PYTHONS:%.py=$(buildDir)/%.py)
 
-PYUIC = pyuic4-3.2
+PYUIC = pyuic4-python3.2
 PYRCC = pyrcc4
 PYTHON = python3.2
 PYPARM = 
