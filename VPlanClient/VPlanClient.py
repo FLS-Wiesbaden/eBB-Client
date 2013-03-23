@@ -584,7 +584,7 @@ class eBBJsHandler(QObject):
 		return self.flsConfig.toJson()
 
 	def _machineId(self):
-		return self.config.get('connection', 'machineId')
+		return self.ebbConfig.get('connection', 'machineId')
 
 	config = pyqtProperty(str, fget=_config)
 	flscfg = pyqtProperty(str, fget=_flsConfig)
