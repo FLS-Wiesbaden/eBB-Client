@@ -577,11 +577,17 @@ class VPlanReloader(QThread):
 
 class eBBJsHandler(QObject):
 	sigModeChanged = pyqtSignal(str)
+	sigReload = pyqtSignal()
 
 	def __init__(self, config, flscfg):
 		QObject.__init__(self)
 		self.ebbConfig = config
 		self.flsConfig = flscfg
+
+	@pyqtSlot()
+	def reload(self):
+		self.sigReload.emit()
+		log.info('js wants me to reload!')
 
 	def _config(self):
 		return self.ebbConfig.toJson()
@@ -672,6 +678,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.sigSndScrShot.connect(self.server.sendScreenshot)
 		self.ui.webView.page().mainFrame().javaScriptWindowObjectCleared.connect(self.attachJsObj)
 		self.ebbJsHandler.sigModeChanged.connect(self.server.changeMode)
+		self.ebbJsHandler.sigReload.connect(self.ui.webView.reload)
 
 		self.server.start()
 
