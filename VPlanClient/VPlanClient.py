@@ -702,7 +702,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_CONFIG)
 
 			# changed the url?
-			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url():
+			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url().toString():
 				self.loadUrl()
 
 	@pyqtSlot()
@@ -880,7 +880,6 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		else:
 			log.debug('Selected page could be loaded.')
 			self.numTry = 0
-			self.createScreenshot()
 	
 	@pyqtSlot(QNetworkReply, QAuthenticator)
 	def setBasicAuth(self, reply, auth):
@@ -991,7 +990,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 				scrShot = scrShot.scaledToWidth(self.config.getint('options', 'scrShotSize'))
 			self.sigSndScrShot.emit(scrShot)
 		else:
-			log.debug('Screenshot canceled (runState: %s ; Visiable: %s).' % (self.server.runState, self.isVisible()))
+			log.debug('Screenshot canceled (runState: %s ; Visible: %s).' % (self.server.runState, self.isVisible()))
 
 	@pyqtSlot(DsbMessage)
 	def dsbMessage(self, msg):
