@@ -503,6 +503,14 @@ class DsbServer(QThread):
 		except Exception as e:
 			log.error('Could not close connection: %s' % (e,))
 
+class FlsWebPage(QWebPage):
+	
+	def __init__(self, parent=None):
+		super(FlsWebPage, self).__init__(parent)
+
+	def javaScriptConsoleMessage(self, msg, lineNumber, sourceID):
+		log.warning("JsConsole(%s:%d): %s" % (sourceID, lineNumber, msg))
+
 class VPlanAbout(QtGui.QDialog):
 	def __init__(self, parentMain):
 		QtGui.QDialog.__init__(self, parent=parentMain)
@@ -587,7 +595,13 @@ class eBBJsHandler(QObject):
 
 	@pyqtSlot()
 	def ready(self):
+		log.info('js is ready now!')
 		self.ready = True
+
+	@pyqtSlot()
+	def notReady(self):
+		log.info('js is not ready anymore!')
+		self.ready = False
 
 	@pyqtSlot()
 	def reload(self):
@@ -659,7 +673,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.ebbJsHandler = eBBJsHandler(self.config, self.flsConfig)
 
 		self.manager = QNetworkAccessManager()
-		self.webpage = QWebPage()
+		self.webpage = FlsWebPage()
 		self.webpage.setNetworkAccessManager(self.manager)
 		self.ui.webView.setPage(self.webpage)
 		if self.config.get('debug', 'enabled'):
@@ -683,6 +697,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.sigSndScrShot.connect(self.server.sendScreenshot)
 		self.ui.webView.page().mainFrame().javaScriptWindowObjectCleared.connect(self.attachJsObj)
 		self.ebbJsHandler.sigModeChanged.connect(self.server.changeMode)
+		self.ui.webView.page().mainFrame().loadStarted.connect(self.ebbJsHandler.notReady)
 		self.ebbJsHandler.sigReload.connect(self.ui.webView.reload)
 
 		self.server.start()
@@ -1042,7 +1057,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		if self.config.getint('browser', 'reloadEvery') > 0:
 			reloader = VPlanReloader('webView', self.config.getint('browser', 'reloadEvery'))
 			self.config.addObserver(reloader)
-			selft.reloader.append(reloader)
+			self.reloader.append(reloader)
 			self.connect(reloader, QtCore.SIGNAL('reloader(QString)'), self.reloadChild)
 			self.ui.webView.loadFinished.connect(reloader.pageLoaded)
 
