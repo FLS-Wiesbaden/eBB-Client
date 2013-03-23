@@ -583,6 +583,11 @@ class eBBJsHandler(QObject):
 		QObject.__init__(self)
 		self.ebbConfig = config
 		self.flsConfig = flscfg
+		self.ready = False
+
+	@pyqtSlot()
+	def ready(self):
+		self.ready = True
 
 	@pyqtSlot()
 	def reload(self):
@@ -710,9 +715,10 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	@pyqtSlot(str)
 	def notification(self, state):
 		if state == 'configChanged':
-			# now inform ebb
-			log.info('Notifiy eBB (JS) about configuration change.')
-			self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_CONFIG)
+			if self.ebbJsHandler.ready:
+				# now inform ebb
+				log.info('Notifiy eBB (JS) about configuration change.')
+				self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_CONFIG)
 
 			# changed the url?
 			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url().toString():
