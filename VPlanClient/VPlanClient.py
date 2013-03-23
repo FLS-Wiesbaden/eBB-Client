@@ -260,6 +260,14 @@ class DsbServer(QThread):
 				log.critical('Connection impossible!')
 				break
 
+		if tryNr == -1:
+			log.info(
+				'Connected to %s:%i with success.' % (
+					self.config.get('connection', 'host'), 
+					self.config.getint('connection', 'port')
+				)
+			)
+
 		return True if tryNr == -1 else False
 
 	def parseCommand(self, cmd):
@@ -390,8 +398,6 @@ class DsbServer(QThread):
 	def run(self):
 		if not self.connect():
 			return
-		else:
-			log.info('Connected to DSB Server!')
 
 		self.runState = True
 		# sending the first request (to auth)
@@ -975,11 +981,21 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		if self.config.getint('options', 'scrShotInterval'):
 			self.scrShotTimer.start()
 
+		exitCode  = subprocess.call(shlex.split('xset s noblank'))
+		exitCode += subprocess.call(shlex.split('xset s noexpose'))
+		exitCode += subprocess.call(shlex.split('xset s off'))
+		log.info('Screensaver turned off %s' % ('successful' if exitCode == 0 else 'with errors',))
+
 	@pyqtSlot()
 	def hideEBB(self):
 		# stop scrshot!
 		self.scrShotTimer.stop()
 		self.hide()
+
+		exitCode  = subprocess.call(shlex.split('xset s blank'))
+		exitCode += subprocess.call(shlex.split('xset s expose'))
+		exitCode += subprocess.call(shlex.split('xset s on'))
+		log.info('Screensaver turned on %s' % ('successful' if exitCode == 0 else 'with errors',))
 
 	@pyqtSlot()
 	def createScreenshot(self):
@@ -1024,6 +1040,7 @@ if __name__ == "__main__":
 	log.setLevel(logging.DEBUG)
 
 	log.debug('Main PID: %i' % (os.getpid(),))	
+	subprocess.call(shlex.split('xset dpms 0 0 0'))
 	app = QtGui.QApplication(sys.argv)
 	ds = VPlanMainWindow()
 	ds.start()
