@@ -377,11 +377,9 @@ class DsbServer(QThread):
 
 	def evtCreateScreenshot(self, msg):
 		log.info('Create screenshot requested.')
-		self.addData('ack;;')
 		self.sigCrtScrShot.emit()
 
 	def evtTriggerConfig(self, msg):
-		self.addData('ack;;')
 		try:
 			if msg.id == 'ebb':
 				self.config.loadJson(msg.value)
@@ -510,6 +508,9 @@ class FlsWebPage(QWebPage):
 
 	def javaScriptConsoleMessage(self, msg, lineNumber, sourceID):
 		log.warning("JsConsole(%s:%d): %s" % (sourceID, lineNumber, msg))
+
+	def javaScriptAlert(self, frame, msg):
+		log.warning('JsAlert (%s): %s' % (frame.frameName(), msg))
 
 class VPlanAbout(QtGui.QDialog):
 	def __init__(self, parentMain):
@@ -730,14 +731,18 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	@pyqtSlot(str)
 	def notification(self, state):
 		if state == 'configChanged':
-			if self.ebbJsHandler.ready:
+			# changed the url?
+			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url().toString():
+				self.loadUrl()
+			elif self.ebbJsHandler.ready:
 				# now inform ebb
 				log.info('Notifiy eBB (JS) about configuration change.')
 				self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_CONFIG)
 
-			# changed the url?
-			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url().toString():
-				self.loadUrl()
+		if self.config.get('debug', 'enabled'):
+			self.ui.webView.settings().setAttribute(QtWebKit.QWebSettings.DeveloperExtrasEnabled, True)
+		else:
+			self.ui.webView.settings().setAttribute(QtWebKit.QWebSettings.DeveloperExtrasEnabled, False)
 
 	@pyqtSlot()
 	def attachJsObj(self):
