@@ -505,9 +505,10 @@ class FlsWebPage(QWebPage):
 	
 	def __init__(self, parent=None):
 		super(FlsWebPage, self).__init__(parent)
+		self.setContextMenuPolicy(QtCore.ActionsContextMenu)
 
 	def javaScriptConsoleMessage(self, msg, lineNumber, sourceID):
-		log.warning("JsConsole(%s:%d): %s" % (sourceID, lineNumber, msg))
+		log.debug("JsConsole(%s:%d): %s" % (sourceID, lineNumber, msg))
 
 	def javaScriptAlert(self, frame, msg):
 		log.warning('JsAlert (%s): %s' % (frame.frameName(), msg))
@@ -701,7 +702,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.ui.webView.page().mainFrame().javaScriptWindowObjectCleared.connect(self.attachJsObj)
 		self.ebbJsHandler.sigModeChanged.connect(self.server.changeMode)
 		self.ui.webView.page().mainFrame().loadStarted.connect(self.ebbJsHandler.notReady)
-		self.ebbJsHandler.sigReload.connect(self.ui.webView.reload)
+		self.ebbJsHandler.sigReload.connect(self.reload)
 
 		self.server.start()
 
@@ -712,6 +713,14 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 		# we have to ignore it...
 		e.ignore()
+
+	@pyqtSlot()
+	def reload(self):
+		if self.diskCache is not None:
+			log.info('Clear cache and reload page')
+			self.diskCache.clear()
+
+		self.ui.webView.reload()
 
 	@pyqtSlot()
 	def quitEBB(self):
@@ -761,7 +770,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.manager.setCache(self.diskCache)
 
 	def enableProxy(self):
-		if self.config.getboolean('proxy', 'enable'):			
+		if self.config.getboolean('proxy', 'enable'):
 			log.info(
 				'Enabled proxy with host %s and port %i' % (self.config.get('proxy', 'host'), self.config.getint('proxy', 'port'))
 			)
@@ -815,7 +824,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.actReload = QtGui.QAction(QtGui.QIcon(''), 'Neuladen', self)
 		self.actReload.setAutoRepeat(self.config.getboolean('browser', 'autoRepeatReload'))
 		self.actReload.setShortcut(self.config.get('shortcuts', 'reload'))
-		self.connect(self.actReload, QtCore.SIGNAL('triggered()'), self.ui.webView.reload)
+		self.connect(self.actReload, QtCore.SIGNAL('triggered()'), self.reload)
 		self.addAction(self.actReload)
 
 		# Browser: stop (Esc)
