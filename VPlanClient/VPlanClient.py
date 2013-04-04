@@ -505,7 +505,6 @@ class FlsWebPage(QWebPage):
 	
 	def __init__(self, parent=None):
 		super(FlsWebPage, self).__init__(parent)
-		self.setContextMenuPolicy(QtCore.ActionsContextMenu)
 
 	def javaScriptConsoleMessage(self, msg, lineNumber, sourceID):
 		log.debug("JsConsole(%s:%d): %s" % (sourceID, lineNumber, msg))
