@@ -72,6 +72,7 @@ class DsbMessage:
 	ACTION_VPLAN = 'vplan'
 	ACTION_ANNOUNCEMENT = 'announcement'
 	ACTION_CONFIG = 'config'
+	ACTION_STATE  = 'state'
 	ACTION_REBOOT = 'reboot'
 	ACTION_SUSPEND = 'suspend'
 	ACTION_RESUME = 'resume'
@@ -79,12 +80,20 @@ class DsbMessage:
 	ACTION_FIREALARM = 'firealarm'
 	ACTION_INFOSCREEN = 'infoscreen'
 
+	STATE_UNKNOWN = -10
+	STATE_UNREGISTERED = -1
+	STATE_ONLINE = 1
+	STATE_OFFLINE = 0
+	STATE_DISABLED = 2
+	STATE_IDLE = 3
+	STATE_PENDING = 5
+
 	POSSIBLE_TARGETS = [TARGET_DSB, TARGET_CLIENT]
 	POSSIBLE_EVENTS = [EVENT_CHANGE, EVENT_CREATE, EVENT_DELETE, EVENT_TRIGGER]
 	POSSIBLE_ACTIONS = [
 		ACTION_NEWS, ACTION_VPLAN, ACTION_ANNOUNCEMENT, ACTION_CONFIG, 
 		ACTION_REBOOT, ACTION_SUSPEND, ACTION_RESUME, ACTION_FIREALARM,
-		ACTION_INFOSCREEN, ACTION_SCREENSHOT
+		ACTION_INFOSCREEN, ACTION_SCREENSHOT, ACTION_STATE
 	]
 
 	def __init__(self):
@@ -344,6 +353,13 @@ class DsbServer(QThread):
 					log.critical('There is an exception by emitting signal: %s!' % (e,))
 			else:
 				log.warning('Target of message is unknown.')
+
+	def evtChangeState(self, msg):
+		if msg.value == DsbMessage.STATE_DISABLED:
+			self.sigHideEBB.emit()
+			self.addData('exit;;')
+			self.addData('exit')
+			self.sigQuitEBB.emit()
 
 	def evtTriggerSuspend(self, msg):
 		log.info('Suspend eBB')
