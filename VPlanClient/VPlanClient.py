@@ -19,6 +19,7 @@ from io import BytesIO
 from hashlib import sha512
 from struct import Struct
 from dsbmessage import DsbMessage
+from logging.handlers import WatchedFileHandler
 import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex, subprocess, zlib, binascii, pickle
 import traceback
 
@@ -285,10 +286,15 @@ class DsbServer(QThread):
 
 	def evtChangeState(self, msg):
 		if msg.value == DsbMessage.STATE_DISABLED:
+			log.info('eBB was disabled. Close eBB.')
 			self.sigHideEBB.emit()
 			self.addData('exit;;')
 			self.addData('exit')
 			self.sigQuitEBB.emit()
+		elif msg.value == DsbMessage.STATE_IDLE:
+			self.evtTriggerSuspend(msg)
+		elif msg.value == DsbMessage.STATE_ONLINE:
+			self.evtTriggerResume(msg)
 
 	def evtTriggerSuspend(self, msg):
 		log.info('Suspend eBB')
@@ -319,6 +325,17 @@ class DsbServer(QThread):
 		self.config.save()
 		log.debug('Send reboot request NOW!')
 		subprocess.call(shlex.split('sudo shutdown -r now'))
+
+	def evtTriggerShutdown(self, msg):
+		log.info('Shutdown requested.')
+		log.debug('Hide main frame.')
+		self.sigHideEBB.emit()
+		log.debug('Send quit (offline) message to dsb server')
+		self.quitEBB()
+		log.debug('Save configuration.')
+		self.config.save()
+		log.debug('Send shutdown request NOW!')
+		subprocess.call(shlex.split('sudo shutdown -h now'))
 
 	def evtCreateScreenshot(self, msg):
 		log.info('Create screenshot requested.')
@@ -1027,12 +1044,15 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			self.ui.webView.loadFinished.connect(reloader.pageLoaded)
 
 if __name__ == "__main__":
-	hdlr = logging.FileHandler('vclient.log')
+	hdlr = WatchedFileHandler('vclient.log')
 	hdlr.setFormatter(formatter)
 	log.addHandler(hdlr)
 	log.setLevel(logging.DEBUG)
 
-	log.debug('Main PID: %i' % (os.getpid(),))	
+	log.debug('Main PID: %i' % (os.getpid(),))
+	# save pid
+	with open('vclient.pid', 'w') as f:
+		f.write('%i' % (os.getpid(),))
 	subprocess.call(shlex.split('xset dpms 0 0 0'))
 	app = QtGui.QApplication(sys.argv)
 	ds = VPlanMainWindow()
