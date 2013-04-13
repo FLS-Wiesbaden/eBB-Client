@@ -104,11 +104,6 @@ class DsbServer(QThread):
 		# check name - use Hostname. Should be unique enough!
 		self.checkName()
 
-		# start module dsb on connect
-		self.addData('dsb')
-		# send client version
-		self.addData('version;%s;' % (self.config.get('app', 'version'),))
-
 	@pyqtSlot(str)
 	def notification(self, state):
 		pass
@@ -191,11 +186,11 @@ class DsbServer(QThread):
 			except socket.error as e:
 				log.warning('Connection try #%i not possible!' % (tryNr,))
 				tryNr += 1
-				wait += random.randint(10, 10 + tryNr * 3)
+				wait = random.randint(1, 5 + tryNr * 2)
 				log.info('Waiting %i seconds!' % (wait,))
 				sleep(wait)
 
-			if tryNr >= 30:
+			if tryNr >= 99:
 				log.critical('Connection impossible!')
 				break
 
@@ -255,6 +250,9 @@ class DsbServer(QThread):
 			self.sigQuitEBB.emit()
 		elif code == '625':
 			self.sigShowEBB.emit()
+		elif code == '626':
+			# connection will be closed! Don't observe anymore!
+			self.sigQuitEBB.emit()
 
 	def processMessage(self, msg):
 		# let us read the json string.
@@ -356,81 +354,96 @@ class DsbServer(QThread):
 			log.error('Got wrong configuration string!')
 
 	def run(self):
-		if not self.connect():
-			return
+		error = True
 
-		self.runState = True
-		# sending the first request (to auth)
-		self.sendNextRequest()
-		self.sock.setblocking(0)
-
-		self.poller = select.poll()
-		self.poller.register(self.sock, DsbServer.READ_ONLY)
-		fd_to_socket = {self.sock.fileno(): self.sock}
-
-		while self.runState:
-			try:
-				events = self.poller.poll(DsbServer.TIMEOUT)
-			except select.error:
+		while error:
+			error = False
+			self.poller = None
+			if not self.connect():
 				break
 
-			for fd, flag in events:
-				s = fd_to_socket[fd]
-				if flag & (select.POLLIN | select.POLLPRI):
-					try:
-						newData = s.recv(4096)
-					except SSL.SysCallError as e:
-						log.error('error occurred while reading (SysCallError): %s' % (e,))
-						newData = None
-					except SSL.ZeroReturnError as e:
-						log.info('Connection closed (ZeroReturnError): %s!' % (e,))
-						newData = None
-					except SSL.WantReadError as e:
-						log.error('error occurred while reading (WantReadError): %s' % (e,))
-					except SSL.WantWriteError as e:
-						log.error('error occurred while reading (WantWriteError): %s' % (e,))
-					except SSL.WantX509LookupError as e:
-						log.error('error occurred while reading (WantX509LookupError): %s' % (e,))
-					except SSL.Error as e:
-						# maybe client does not use ssl
-						log.error('error occurred while reading (ssl error): %s' % (e,))
+			# clear queue
+			with self.data.mutex:
+				self.data.queue.clear()
+			# start module dsb on connect
+			self.addData('dsb')
+			# send client version
+			self.addData('version;%s;' % (self.config.get('app', 'version'),))
 
-					if newData:
-						self.parseCommand(newData)
-						self.poller.modify(s, DsbServer.READ_WRITE)
-					else:
-						log.info('Disconnect...')
+			self.runState = True
+			self.sendNextRequest()
+			self.sock.setblocking(0)
+
+			self.poller = select.poll()
+			self.poller.register(self.sock, DsbServer.READ_ONLY)
+			fd_to_socket = {self.sock.fileno(): self.sock}
+
+			while self.runState:
+				try:
+					events = self.poller.poll(DsbServer.TIMEOUT)
+				except select.error:
+					break
+
+				for fd, flag in events:
+					s = fd_to_socket[fd]
+					if flag & (select.POLLIN | select.POLLPRI):
+						try:
+							newData = s.recv(4096)
+						except SSL.SysCallError as e:
+							log.error('error occurred while reading (SysCallError): %s' % (e,))
+							newData = None
+							error = True
+							self.runState = False
+							continue
+						except SSL.ZeroReturnError as e:
+							log.info('Connection closed (ZeroReturnError): %s!' % (e,))
+							newData = None
+						except SSL.WantReadError as e:
+							log.error('error occurred while reading (WantReadError): %s' % (e,))
+						except SSL.WantWriteError as e:
+							log.error('error occurred while reading (WantWriteError): %s' % (e,))
+						except SSL.WantX509LookupError as e:
+							log.error('error occurred while reading (WantX509LookupError): %s' % (e,))
+						except SSL.Error as e:
+							# maybe client does not use ssl
+							log.error('error occurred while reading (ssl error): %s' % (e,))
+
+						if newData:
+							self.parseCommand(newData)
+							self.poller.modify(s, DsbServer.READ_WRITE)
+						else:
+							log.info('Disconnect...')
+							self.poller.unregister(s)
+							self.runState = False
+							s.shutdown(socket.SHUT_WR)
+							s.close()
+							self.sock = None
+					elif flag & select.POLLHUP:
+						log.info('Client hung up..')
 						self.poller.unregister(s)
-						self.runState = False
 						s.shutdown(socket.SHUT_WR)
 						s.close()
 						self.sock = None
-				elif flag & select.POLLHUP:
-					log.info('Client hung up..')
-					self.poller.unregister(s)
-					s.shutdown(socket.SHUT_WR)
-					s.close()
-					self.sock = None
-				elif flag & select.POLLOUT:
-					try:
-						nextMsg = self.data.get_nowait()
-					except queue.Empty:
-						self.poller.modify(s, DsbServer.READ_ONLY)
-					else: 
-						if not nextMsg.startswith('screenshot'):
-							log.debug('sending msg %s' % (nextMsg,))
-						elif nextMsg == 'screenshot;eof;':
-							self.scrshotSend = True
-							log.debug('sending a screenshot.')
-						s.sendall(nextMsg)
-				elif flag & select.POLLERR:
-					log.error('Handling exceptional condition.')
-					log.info('Will stop listening!')
-					self.runState = False
-					self.poller.unregister(s)
-					s.shutdown(socket.SHUT_WR)
-					s.close()
-					self.sock = None
+					elif flag & select.POLLOUT:
+						try:
+							nextMsg = self.data.get_nowait()
+						except queue.Empty:
+							self.poller.modify(s, DsbServer.READ_ONLY)
+						else: 
+							if not nextMsg.startswith('screenshot'):
+								log.debug('sending msg %s' % (nextMsg,))
+							elif nextMsg == 'screenshot;eof;':
+								self.scrshotSend = True
+								log.debug('sending a screenshot.')
+							s.sendall(nextMsg)
+					elif flag & select.POLLERR:
+						log.error('Handling exceptional condition.')
+						log.info('Will stop listening!')
+						self.runState = False
+						self.poller.unregister(s)
+						s.shutdown(socket.SHUT_WR)
+						s.close()
+						self.sock = None
 
 	def sendNextRequest(self):
 		try:
@@ -980,6 +993,15 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 	@pyqtSlot()
 	def showEBB(self):
+		exitCode  = subprocess.call(shlex.split('xset s noblank'))
+		exitCode += subprocess.call(shlex.split('xset s noexpose'))
+		exitCode += subprocess.call(shlex.split('xset s off'))
+		log.info('Screensaver turned off %s' % ('successful' if exitCode == 0 else 'with errors',))
+
+		# already shown?
+		if self.isVisible():
+			return
+
 		if self.config.getboolean('app', 'fullScreenAtStartup'):
 			self.showFullScreen()
 		else:
@@ -990,11 +1012,6 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		if not self.loaded:
 			self.loaded = True
 			self.loadUrl()
-
-		exitCode  = subprocess.call(shlex.split('xset s noblank'))
-		exitCode += subprocess.call(shlex.split('xset s noexpose'))
-		exitCode += subprocess.call(shlex.split('xset s off'))
-		log.info('Screensaver turned off %s' % ('successful' if exitCode == 0 else 'with errors',))
 
 	@pyqtSlot()
 	def hideEBB(self):
