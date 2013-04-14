@@ -173,7 +173,7 @@ class DsbServer(QThread):
 				self.addData('screenshot;%i;%s' % (i, data[pos:pos+2048]))
 				i += 1
 
-			self.addData('screenshot;eof;')
+			self.addData('screenshot;eof;%i' % (i,))
 
 	def connect(self):
 		tryNr = 0
