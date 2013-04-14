@@ -174,6 +174,7 @@ class DsbServer(QThread):
 				i += 1
 
 			self.addData('screenshot;eof;%i' % (i,))
+			log.debug('screenshot;eof;%i' % (i,))
 
 	def connect(self):
 		tryNr = 0
@@ -370,6 +371,8 @@ class DsbServer(QThread):
 			self.addData('dsb')
 			# send client version
 			self.addData('version;%s;' % (self.config.get('app', 'version'),))
+			# reset screenshot
+			self.scrshotSend = True
 
 			self.runState = True
 			self.sendNextRequest()
@@ -433,7 +436,7 @@ class DsbServer(QThread):
 						else: 
 							if not nextMsg.startswith('screenshot'):
 								log.debug('sending msg %s' % (nextMsg,))
-							elif nextMsg == 'screenshot;eof;':
+							elif nextMsg.startswith('screenshot;eof;'):
 								self.scrshotSend = True
 								log.debug('sending a screenshot.')
 							s.sendall(nextMsg)
