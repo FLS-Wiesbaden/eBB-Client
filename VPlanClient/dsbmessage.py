@@ -25,6 +25,7 @@ class DsbMessage:
 	ACTION_SCREENSHOT = 'screenshot'
 	ACTION_FIREALARM = 'firealarm'
 	ACTION_INFOSCREEN = 'infoscreen'
+	ACTION_RESET = 'reset'
 
 	STATE_UNKNOWN = -10
 	STATE_UNREGISTERED = -1
