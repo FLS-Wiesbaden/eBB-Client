@@ -251,6 +251,7 @@ class DsbServer(QThread):
 		elif code == '625':
 			self.sigShowEBB.emit()
 		elif code == '626':
+			self.runState = False
 			# connection will be closed! Don't observe anymore!
 			self.sigQuitEBB.emit()
 
