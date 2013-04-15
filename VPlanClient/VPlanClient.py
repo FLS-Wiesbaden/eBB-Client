@@ -996,7 +996,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 	@pyqtSlot()
 	def showEBB(self):
-		exitCode  = subprocess.call(shlex.split('xset s noblank'))
+		exitCode  = subprocess.call(shlex.split('xset -dpms'))
+		exitCode += subprocess.call(shlex.split('xset s noblank'))
 		exitCode += subprocess.call(shlex.split('xset s noexpose'))
 		exitCode += subprocess.call(shlex.split('xset s off'))
 		log.info('Screensaver turned off %s' % ('successful' if exitCode == 0 else 'with errors',))
@@ -1022,7 +1023,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.scrShotTimer.stop()
 		self.hide()
 
-		exitCode  = subprocess.call(shlex.split('xset s blank'))
+		exitCode  = subprocess.call(shlex.split('xset +dpms'))
+		exitCode += subprocess.call(shlex.split('xset s blank'))
 		exitCode += subprocess.call(shlex.split('xset s expose'))
 		exitCode += subprocess.call(shlex.split('xset s on'))
 		log.info('Screensaver turned on %s' % ('successful' if exitCode == 0 else 'with errors',))
