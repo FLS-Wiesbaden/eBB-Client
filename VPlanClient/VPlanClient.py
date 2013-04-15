@@ -174,7 +174,6 @@ class DsbServer(QThread):
 				i += 1
 
 			self.addData('screenshot;eof;%i' % (i,))
-			log.debug('screenshot;eof;%i' % (i,))
 
 	def connect(self):
 		tryNr = 0
