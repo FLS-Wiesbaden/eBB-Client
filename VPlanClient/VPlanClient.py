@@ -719,6 +719,13 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	@pyqtSlot(str)
 	def notification(self, state):
 		if state == 'configChanged':
+			timerActive = self.scrShotTimer.isActive()
+			if timerActive:
+				self.scrShotTimer.stop()
+			self.scrShotTimer.setInterval(self.config.getint('options', 'scrShotInterval')*1000)
+			if timerActive:
+				self.scrShotTimer.start()
+			del timerActive
 			# changed the url?
 			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url().toString() \
 					and self.loaded:
