@@ -63,10 +63,11 @@ class FLSConfiguration(SafeConfigParser, ObservableSubject):
 			self.read([self._configFile])
 			self.notify(FLSConfiguration.STATE_LOADED)
 
-	def save(self):
+	def save(self, notify=True):
 		if self._configFile is not None:
 			with open(self._configFile, 'w') as f:
 				self.write(f)
 
-			# uhh we notify about changes!
-			self.notify(FLSConfiguration.STATE_CHANGED)
+			# uhh we notify about changes (if we want,..)!
+			if notify:
+				self.notify(FLSConfiguration.STATE_CHANGED)
