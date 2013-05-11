@@ -604,6 +604,8 @@ class eBBJsHandler(QObject):
 	@pyqtSlot(str)
 	def modeChanged(self, mode):
 		self.sigModeChanged.emit(mode)
+		self.flsConfig.set('app', 'mode', mode)
+		self.flsConfig.save()
 		log.info('Mode changed: %s' % (mode,))
 
 	@pyqtSlot(str)
