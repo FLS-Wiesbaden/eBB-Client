@@ -25,6 +25,7 @@ import traceback
 
 __author__  = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2013 Website-Team Friedrich-List-Schule-Wiesbaden'
+__version__ = 0.5
 
 FORMAT = '%(asctime)-15s %(message)s'
 formatter = logging.Formatter(FORMAT, datefmt='%b %d %H:%M:%S')
@@ -223,7 +224,7 @@ class DsbServer(QThread):
 		elif code == '203':
 			log.info('Ok. Version is up to date.')
 			# now register!
-			self.addData('register;%s;%s' % (self.getMachineID(), self.getHostname()))
+			self.addData('register;%s;%s;%s' % (self.getMachineID(), self.getHostname(), __version__))
 		elif code == '204':
 			self.config.set('connection', 'dsbName', msg)
 			self.addData('getConfig;;')
@@ -234,7 +235,6 @@ class DsbServer(QThread):
 		elif code == '402':
 			# uhhh we have a version mismatch!
 			log.critical('Version mismatch - you need at least "%s"' % (msg,))
-			self.interrupt(None, None)
 		elif code == '621':
 			log.info('Can\'t go offline. Ignore events.')
 		elif code == '623':
@@ -369,7 +369,7 @@ class DsbServer(QThread):
 			# start module dsb on connect
 			self.addData('dsb')
 			# send client version
-			self.addData('version;%s;' % (self.config.get('app', 'version'),))
+			self.addData('version;%s;' % (__version__,))
 			# reset screenshot
 			self.scrshotSend = True
 
