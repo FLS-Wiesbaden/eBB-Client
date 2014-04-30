@@ -20,12 +20,13 @@ from hashlib import sha512
 from struct import Struct
 from dsbmessage import DsbMessage
 from logging.handlers import WatchedFileHandler
+from urllib.parse import urlencode
 import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex, subprocess, zlib, binascii, pickle
-import traceback
+import traceback, sysconfig, urllib, urllib.request
 
 __author__  = 'Lukas Schreiner'
-__copyright__ = 'Copyright (C) 2012 - 2013 Website-Team Friedrich-List-Schule-Wiesbaden'
-__version__ = 0.5
+__copyright__ = 'Copyright (C) 2012 - 2014 Website-Team Friedrich-List-Schule-Wiesbaden'
+__version__ = 0.6
 
 FORMAT = '%(asctime)-15s %(message)s'
 formatter = logging.Formatter(FORMAT, datefmt='%b %d %H:%M:%S')
@@ -52,6 +53,7 @@ def verify_cb(conn, cert, errnum, depth, ok):
 	certIssuer = cert.get_issuer()
 	certSubject = cert.get_subject()
 
+	# FIXME: make it configurable and not fix! (Like a string...)
 	if depth == 0 and certIssuer is not None and certIssuer.commonName == 'CAcert Class 3 Root' \
 		and certSubject.OU == 'Website-Team' \
 		and certSubject.CN == 'pytools.fls-wiesbaden.de':
@@ -86,6 +88,7 @@ class DsbServer(QThread):
 		self.flsConfig.addObserver(self)
 		self.scrshotSend = True
 		self.machineId = None
+		self.scrShotUrl = None
 
 		# Initialize context
 		self.ctx = SSL.Context(SSL.SSLv3_METHOD)
@@ -93,7 +96,10 @@ class DsbServer(QThread):
 		self.ctx.set_verify(SSL.VERIFY_PEER|SSL.VERIFY_FAIL_IF_NO_PEER_CERT, verify_cb)
 		self.ctx.use_privatekey_file(self.config.get('connection', 'privKey'))
 		self.ctx.use_certificate_file(self.config.get('connection', 'pubKey'))
-		self.ctx.load_verify_locations(self.config.get('connection', 'caCert'))
+		if sysconfig.get_python_version() < '3.4':
+			self.ctx.load_verify_locations(os.path.abspath(self.config.get('connection', 'caCert')))
+		else:
+			self.ctx.load_verify_locations(os.path.abspath(self.config.get('connection', 'caCert')).encode('utf-8'))
 		self.ctx.set_verify_depth(self.config.getint('connection', 'verifyDepth'))
 
 		self.poller = None
@@ -163,18 +169,44 @@ class DsbServer(QThread):
 			# Read QByteArray containing PNG into a StringIO.
 			string_io = BytesIO(byte_array)
 			string_io.seek(0)
-			data = zlib.compress(string_io.getvalue(), 9)
-			
-			self.addData('screenshot;chksum;%i:%s' % (len(data),sha512(data).hexdigest()))
-
-			data = Struct('%is'%(len(data),)).pack(data)
-			data = binascii.hexlify(data).decode('utf-8')
-			i = 0
-			for pos in range(0, len(data), 2048):
-				self.addData('screenshot;%i;%s' % (i, data[pos:pos+2048]))
-				i += 1
-
-			self.addData('screenshot;eof;%i' % (i,))
+			#data = zlib.compress(string_io.getvalue(), 9)
+			#
+			#self.addData('screenshot;chksum;%i:%s' % (len(data),sha512(data).hexdigest()))
+                        #
+			#data = Struct('%is'%(len(data),)).pack(data)
+			#data = binascii.hexlify(data).decode('utf-8')
+			#i = 0
+			#for pos in range(0, len(data), 2048):
+			#	self.addData('screenshot;%i;%s' % (i, data[pos:pos+2048]))
+			#	i += 1
+                        #
+			#self.addData('screenshot;eof;%i' % (i,))
+			url = self.scrShotUrl
+			if url is not None and len(url.strip()) > 0:
+				log.debug('Try to open URL: %s' % (url,))
+				headers = {'Content-type': 'application/x-www-form-urlencoded'}
+				img = string_io.getvalue()
+				with open('/tmp/scrshot.png', 'wb') as f:
+					f.write(img)
+				req = urllib.request.Request(
+					url, 
+					urlencode({'img': img}).encode('utf-8'), 
+					headers, method='POST'
+				)
+				if self.config.getboolean('proxy', 'enable'):
+					req.set_proxy('%s%s' % (self.config.get('proxy', 'host'), self.config.get('proxy', 'port')), 'http')
+				try:
+					r = urllib.request.urlopen(req)
+					content = r.read().decode('utf-8')
+					log.debug('Got data: %s' % (content,))
+					if r.code == 200:
+						log.debug('Got data with success')
+					else:
+						log.error('Got wrong status code from cmsGot wrong status code from cms..')
+				except Exception as e:
+					log.error('Could not open %s (%s)' % (url, str(e)))
+			self.addData('screenshot;update;')
+			self.scrshotSend = True
 
 	def connect(self):
 		tryNr = 0
@@ -228,6 +260,7 @@ class DsbServer(QThread):
 		elif code == '204':
 			self.config.set('connection', 'dsbName', msg)
 			self.addData('getConfig;;')
+			self.addData('getScrShotUrl;;')
 		elif code == '303':
 			log.info('Ok. Version is sufficient but there is a new version?')
 			# FIXME update the vplan client?
@@ -254,6 +287,9 @@ class DsbServer(QThread):
 			self.runState = False
 			# connection will be closed! Don't observe anymore!
 			self.sigQuitEBB.emit()
+		elif code == '701':
+			# now we got the url.
+			self.scrShotUrl = msg
 
 	def processMessage(self, msg):
 		# let us read the json string.
@@ -438,7 +474,10 @@ class DsbServer(QThread):
 							elif nextMsg.startswith('screenshot;eof;'):
 								self.scrshotSend = True
 								log.debug('sending a screenshot.')
-							s.sendall(nextMsg)
+							if sysconfig.get_python_version() < '3.4':
+								s.sendall(nextMsg)
+							else:
+								s.sendall(nextMsg.encode('utf-8'))
 					elif flag & select.POLLERR:
 						log.error('Handling exceptional condition.')
 						log.info('Will stop listening!')
@@ -455,7 +494,10 @@ class DsbServer(QThread):
 			log.debug('output queue is empty.')
 		else:
 			log.debug('sending data')
-			self.sock.send(nextMsg)
+			if sysconfig.get_python_version() < '3.4':
+				self.sock.send(nextMsg)
+			else:
+				self.sock.send(nextMsg.encode('utf-8'))
 
 	def shutdown(self):
 		try:
