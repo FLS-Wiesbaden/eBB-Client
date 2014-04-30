@@ -1037,6 +1037,10 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		exitCode += subprocess.call(shlex.split('xset s expose'))
 		exitCode += subprocess.call(shlex.split('xset s on'))
 		log.info('Screensaver turned on %s' % ('successful' if exitCode == 0 else 'with errors',))
+		# if we are connected with MDC, shutdown directly. That's the best.
+		if self.config.getboolean('mdc', 'enable'):
+			log.info('We are running with MDC. Lets shutdown because of hidding the eBB.')
+			self.server.evtTriggerShutdown()
 
 	@pyqtSlot()
 	def createScreenshot(self):
