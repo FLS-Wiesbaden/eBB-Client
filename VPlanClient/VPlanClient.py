@@ -186,16 +186,15 @@ class DsbServer(QThread):
 				log.debug('Try to open URL: %s' % (url,))
 				headers = {'Content-type': 'application/x-www-form-urlencoded'}
 				img = string_io.getvalue()
-				with open('/tmp/scrshot.png', 'wb') as f:
-					f.write(img)
 				req = urllib.request.Request(
 					url, 
 					urlencode({'img': img}).encode('utf-8'), 
 					headers, method='POST'
 				)
-				if self.config.getboolean('proxy', 'enable'):
-					req.set_proxy('%s%s' % (self.config.get('proxy', 'host'), self.config.get('proxy', 'port')), 'http')
-					req.set_proxy('%s%s' % (self.config.get('proxy', 'host'), self.config.get('proxy', 'port')), 'https')
+				# disabled: please set the http[s]_proxy-Env-Variables.
+				#if self.config.getboolean('proxy', 'enable'):
+				#	req.set_proxy('%s%s' % (self.config.get('proxy', 'host'), self.config.get('proxy', 'port')), 'http')
+				#	req.set_proxy('%s%s' % (self.config.get('proxy', 'host'), self.config.get('proxy', 'port')), 'https')
 				try:
 					r = urllib.request.urlopen(req)
 					content = r.read().decode('utf-8')
