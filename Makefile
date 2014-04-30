@@ -15,7 +15,7 @@ COMPILED_PYTHONS = $(PYTHONS:%.py=$(buildDir)/%.py)
 
 PYUIC = pyuic4
 PYRCC = pyrcc4
-PYTHON = python3.3
+PYTHON = python3
 PYPARM = 
 
 all: createDir debug

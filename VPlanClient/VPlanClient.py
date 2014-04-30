@@ -195,6 +195,7 @@ class DsbServer(QThread):
 				)
 				if self.config.getboolean('proxy', 'enable'):
 					req.set_proxy('%s%s' % (self.config.get('proxy', 'host'), self.config.get('proxy', 'port')), 'http')
+					req.set_proxy('%s%s' % (self.config.get('proxy', 'host'), self.config.get('proxy', 'port')), 'https')
 				try:
 					r = urllib.request.urlopen(req)
 					content = r.read().decode('utf-8')
