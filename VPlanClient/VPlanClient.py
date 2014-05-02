@@ -22,7 +22,7 @@ from dsbmessage import DsbMessage
 from logging.handlers import WatchedFileHandler
 from urllib.parse import urlencode
 import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex, subprocess, zlib, binascii, pickle
-import traceback, sysconfig, urllib, urllib.request
+import traceback, urllib, urllib.request
 
 __author__  = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2014 Website-Team Friedrich-List-Schule-Wiesbaden'
@@ -474,9 +474,6 @@ class DsbServer(QThread):
 							elif nextMsg.startswith('screenshot;eof;'):
 								self.scrshotSend = True
 								log.debug('sending a screenshot.')
-							if sysconfig.get_python_version() < '3.4':
-								s.sendall(nextMsg)
-							else:
 								s.sendall(nextMsg.encode('utf-8'))
 					elif flag & select.POLLERR:
 						log.error('Handling exceptional condition.')
@@ -494,10 +491,7 @@ class DsbServer(QThread):
 			log.debug('output queue is empty.')
 		else:
 			log.debug('sending data')
-			if sysconfig.get_python_version() < '3.4':
-				self.sock.send(nextMsg)
-			else:
-				self.sock.send(nextMsg.encode('utf-8'))
+			self.sock.send(nextMsg.encode('utf-8'))
 
 	def shutdown(self):
 		try:
