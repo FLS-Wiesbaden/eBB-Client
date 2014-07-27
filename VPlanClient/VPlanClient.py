@@ -337,8 +337,10 @@ class DsbServer(QThread):
 		log.debug('Disable display.')
 		exitCode = subprocess.call(shlex.split('xset dpms force off'))
 		log.debug('Displayed turned off %s' % ('successful' if exitCode == 0 else 'with errors',))
-		log.info('Now we are suspended, we will inform the cms.')
-		self.addData('goIdle;;')
+		# we will go offline!!! do not sent him an goIdle, because in sigHideEBB he sent already an offline!
+		if not self.config.getboolean('mdc', 'enable'):
+			log.info('Now we are suspended, we will inform the cms.')
+			self.addData('goIdle;;')
 
 	def evtTriggerResume(self, msg):
 		log.info('Resume eBB')
@@ -1087,7 +1089,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			# first send "go offline event"
 			self.server.quitEBB()
 			log.info('We are running with MDC. Lets shutdown because of hidding the eBB.')
-			# wait min. 10s !!!
+			# wait min. 3s !!!
 			thread.Thread(target=self.server.executeShutdown).start()
 
 	@pyqtSlot()
