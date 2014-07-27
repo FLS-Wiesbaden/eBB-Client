@@ -281,7 +281,7 @@ class DsbServer(QThread):
 			self.addData('exit')
 			# do not make a single quit. If we are offline. Than shutdown. 
 			if self.config.getboolean('mdc', 'enable'):
-				thread.Thread(target=self.executeShutdown).start()
+				Thread(target=self.executeShutdown).start()
 			else:
 				self.sigQuitEBB.emit()
 		elif code == '625':
@@ -376,7 +376,7 @@ class DsbServer(QThread):
 		self.config.save()
 		log.debug('Send shutdown request NOW!')
 		# use min. 3s !!!
-		thread.Thread(target=self.executeShutdown).start()
+		Thread(target=self.executeShutdown).start()
 
 	def executeShutdown(self):
 		log.info('Waiting 3sec before shutdown!')
@@ -1094,7 +1094,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			self.server.quitEBB()
 			log.info('We are running with MDC. Lets shutdown because of hidding the eBB.')
 			# wait min. 3s !!!
-			thread.Thread(target=self.server.executeShutdown).start()
+			Thread(target=self.server.executeShutdown).start()
 
 	@pyqtSlot()
 	def createScreenshot(self):
