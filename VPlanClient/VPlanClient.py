@@ -279,7 +279,11 @@ class DsbServer(QThread):
 				self.sigHideEBB.emit()
 			self.addData('exit;;')
 			self.addData('exit')
-			self.sigQuitEBB.emit()
+			# do not make a single quit. If we are offline. Than shutdown. 
+			if self.config.getboolean('mdc', 'enable'):
+				thread.Thread(target=self.executeShutdown).start()
+			else:
+				self.sigQuitEBB.emit()
 		elif code == '625':
 			self.sigShowEBB.emit()
 		elif code == '626':
@@ -371,7 +375,7 @@ class DsbServer(QThread):
 		log.debug('Save configuration.')
 		self.config.save()
 		log.debug('Send shutdown request NOW!')
-		# use min. 10s !!!
+		# use min. 3s !!!
 		thread.Thread(target=self.executeShutdown).start()
 
 	def executeShutdown(self):
