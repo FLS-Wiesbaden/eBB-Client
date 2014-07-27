@@ -373,9 +373,9 @@ class DsbServer(QThread):
 		thread.Thread(target=self.executeShutdown).start()
 
 	def executeShutdown(self):
-		log.info('Waiting 10sec before shutdown!')
+		log.info('Waiting 3sec before shutdown!')
 		try:
-			sleep(10)
+			sleep(3)
 		except:
 			pass
 		subprocess.call(shlex.split('sudo shutdown -h now'))
@@ -749,10 +749,10 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	@pyqtSlot()
 	def quitEBB(self):
 		self.scrShotTimer.stop()
-		log.info('Quitting eBB. Wait 2 sec. for communication with pyTools.')
+		log.info('Quitting eBB. Wait 5 sec. for communication with pyTools.')
 		# wait 2 sec!
 		self.timer = QTimer()
-		self.timer.setInterval(2000)
+		self.timer.setInterval(5000)
 		self.timer.setSingleShot(True)
 		self.timer.timeout.connect(self.quitHard)
 		self.timer.start()
