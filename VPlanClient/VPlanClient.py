@@ -96,10 +96,7 @@ class DsbServer(QThread):
 		self.ctx.set_verify(SSL.VERIFY_PEER|SSL.VERIFY_FAIL_IF_NO_PEER_CERT, verify_cb)
 		self.ctx.use_privatekey_file(self.config.get('connection', 'privKey'))
 		self.ctx.use_certificate_file(self.config.get('connection', 'pubKey'))
-		if sysconfig.get_python_version() < '3.4':
-			self.ctx.load_verify_locations(os.path.abspath(self.config.get('connection', 'caCert')))
-		else:
-			self.ctx.load_verify_locations(os.path.abspath(self.config.get('connection', 'caCert')).encode('utf-8'))
+		self.ctx.load_verify_locations(os.path.abspath(self.config.get('connection', 'caCert')).encode('utf-8'))
 		self.ctx.set_verify_depth(self.config.getint('connection', 'verifyDepth'))
 
 		self.poller = None
@@ -277,7 +274,9 @@ class DsbServer(QThread):
 			log.info('Marked as offline. Accept close events.')
 			# i'm offline. Stop application!
 			# we should have a specific things in events..
-			self.sigHideEBB.emit()
+			# bug 2014-07-27 LUS: only trigger this if we are not MDC (otherwise we would have a loop)
+			if not self.config.getboolean('mdc', 'enable'):
+				self.sigHideEBB.emit()
 			self.addData('exit;;')
 			self.addData('exit')
 			self.sigQuitEBB.emit()
@@ -370,6 +369,15 @@ class DsbServer(QThread):
 		log.debug('Save configuration.')
 		self.config.save()
 		log.debug('Send shutdown request NOW!')
+		# use min. 10s !!!
+		thread.Thread(target=self.executeShutdown).start()
+
+	def executeShutdown(self):
+		log.info('Waiting 10sec before shutdown!')
+		try:
+			sleep(10)
+		except:
+			pass
 		subprocess.call(shlex.split('sudo shutdown -h now'))
 
 	def evtCreateScreenshot(self, msg):
@@ -471,6 +479,7 @@ class DsbServer(QThread):
 						else: 
 							if not nextMsg.startswith('screenshot'):
 								log.debug('sending msg %s' % (nextMsg,))
+								s.sendall(nextMsg.encode('utf-8'))
 							elif nextMsg.startswith('screenshot;eof;'):
 								self.scrshotSend = True
 								log.debug('sending a screenshot.')
@@ -1075,8 +1084,11 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		log.info('Screensaver turned on %s' % ('successful' if exitCode == 0 else 'with errors',))
 		# if we are connected with MDC, shutdown directly. That's the best.
 		if self.config.getboolean('mdc', 'enable'):
+			# first send "go offline event"
+			self.server.quitEBB()
 			log.info('We are running with MDC. Lets shutdown because of hidding the eBB.')
-			self.server.evtTriggerShutdown()
+			# wait min. 10s !!!
+			thread.Thread(target=self.server.executeShutdown).start()
 
 	@pyqtSlot()
 	def createScreenshot(self):
