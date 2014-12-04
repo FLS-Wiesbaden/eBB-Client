@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# vim: fenc=utf-8:ts=4:sw=4:si:sta:noet
 from ui_browser import *
 from ui_about import *
 from ui_url import *
@@ -91,8 +92,8 @@ class DsbServer(QThread):
 		self.scrShotUrl = None
 
 		# Initialize context
-		self.ctx = SSL.Context(SSL.SSLv3_METHOD)
-		self.ctx.set_options(SSL.OP_NO_SSLv2|SSL.OP_NO_TLSv1)
+		self.ctx = SSL.Context(SSL.TLSv1_2_METHOD)
+		self.ctx.set_options(SSL.OP_NO_SSLv2|SSL.OP_NO_TLSv1|SSL.OP_NO_SSLv3)
 		self.ctx.set_verify(SSL.VERIFY_PEER|SSL.VERIFY_FAIL_IF_NO_PEER_CERT, verify_cb)
 		self.ctx.use_privatekey_file(self.config.get('connection', 'privKey'))
 		self.ctx.use_certificate_file(self.config.get('connection', 'pubKey'))
@@ -235,6 +236,7 @@ class DsbServer(QThread):
 		return True if tryNr == -1 else False
 
 	def parseCommand(self, cmd):
+		quit = False
 		code, msg, *args = cmd.decode('utf-8').rstrip().split(' - ')
 		log.debug('%s: %s' % (code, msg))
 
@@ -265,6 +267,11 @@ class DsbServer(QThread):
 		elif code == '402':
 			# uhhh we have a version mismatch!
 			log.critical('Version mismatch - you need at least "%s"' % (msg,))
+			quit = True
+		elif code == '403':
+			# uhhh we don't have permission to connect! Close!
+			log.critical('No authorization ("%s") - will exit!' % (msg,))
+			quit = True
 		elif code == '621':
 			log.info('Can\'t go offline. Ignore events.')
 		elif code == '623':
@@ -293,6 +300,8 @@ class DsbServer(QThread):
 		elif code == '701':
 			# now we got the url.
 			self.scrShotUrl = msg
+
+		return quit
 
 	def processMessage(self, msg):
 		# let us read the json string.
@@ -462,8 +471,16 @@ class DsbServer(QThread):
 							log.error('error occurred while reading (ssl error): %s' % (e,))
 
 						if newData:
-							self.parseCommand(newData)
-							self.poller.modify(s, DsbServer.READ_WRITE)
+							quit = self.parseCommand(newData)
+							if not quit:
+								self.poller.modify(s, DsbServer.READ_WRITE)
+							else:
+								log.info('Disconnect...')
+								self.poller.unregister(s)
+								self.runState = False
+								s.shutdown(socket.SHUT_WR)
+								s.close()
+								self.sock = None
 						else:
 							log.info('Disconnect...')
 							self.poller.unregister(s)
