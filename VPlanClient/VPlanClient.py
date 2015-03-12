@@ -26,8 +26,8 @@ import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json,
 import traceback, urllib, urllib.request
 
 __author__  = 'Lukas Schreiner'
-__copyright__ = 'Copyright (C) 2012 - 2014 Website-Team Friedrich-List-Schule-Wiesbaden'
-__version__ = 0.6
+__copyright__ = 'Copyright (C) 2012 - 2015 Website-Team Friedrich-List-Schule-Wiesbaden'
+__version__ = 0.7
 
 FORMAT = '%(asctime)-15s %(message)s'
 formatter = logging.Formatter(FORMAT, datefmt='%b %d %H:%M:%S')
@@ -699,6 +699,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 	NOTIFY_PAGE = "TvVplan.processMessage('{MSG}')"
 	NOTIFY_CONFIG = "TvVplan.configChanged()"
+	NOTIFY_SUSPEND = 'TvVplan.suspendTv()'
+	NOTIFY_RESUME = 'TvVplan.resumeTv()'
 
 	def __init__(self):
 		QtGui.QMainWindow.__init__(self)
@@ -1093,6 +1095,8 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		if not self.loaded:
 			self.loaded = True
 			self.loadUrl()
+		else:
+			self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_RESUME)
 
 	@pyqtSlot()
 	def hideEBB(self):
@@ -1105,6 +1109,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		exitCode += subprocess.call(shlex.split('xset s expose'))
 		exitCode += subprocess.call(shlex.split('xset s on'))
 		log.info('Screensaver turned on %s' % ('successful' if exitCode == 0 else 'with errors',))
+		self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_SUSPEND)
 		# if we are connected with MDC, shutdown directly. That's the best.
 		if self.config.getboolean('mdc', 'enable'):
 			# first send "go offline event"
