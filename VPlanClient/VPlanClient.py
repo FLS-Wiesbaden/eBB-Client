@@ -10,7 +10,7 @@ from configparser import SafeConfigParser
 from PyQt4.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice, QMutex, QMutexLocker, QTimer
 from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
 from PyQt4.QtWebKit import QWebPage
-from PyQt4 import QtGui, QtWebKit
+from PyQt4 import QtGui, QtWebKit, QtCore
 from time import sleep
 from ansistrm import ColorizingStreamHandler
 from observer import ObservableSubject, Observer, NotifyReceiver
@@ -27,7 +27,7 @@ import traceback, urllib, urllib.request
 
 __author__  = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2015 Website-Team Friedrich-List-Schule-Wiesbaden'
-__version__ = 0.7
+__version__ = 0.8
 
 FORMAT = '%(asctime)-15s %(message)s'
 formatter = logging.Formatter(FORMAT, datefmt='%b %d %H:%M:%S')
@@ -70,6 +70,7 @@ class DsbServer(QThread):
 	sigQuitEBB = pyqtSignal()
 	sigNewMsg  = pyqtSignal(DsbMessage)
 	sigCrtScrShot = pyqtSignal()
+	sigGetState = pyqtSignal()
 
 	# Commonly used flag setes
 	READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
@@ -146,9 +147,9 @@ class DsbServer(QThread):
 	def quitEBB(self):
 		self.addData('goOffline;;')
 
-	@pyqtSlot(object)
-	def addEvent(self, evt):
-		self.events.put(evt)
+	@pyqtSlot(str)
+	def sendState(self, state):
+		self.addData('go%s;;' % (state.capitalize(),))
 
 	@pyqtSlot(str)
 	def changeMode(self, mode):
@@ -412,6 +413,11 @@ class DsbServer(QThread):
 				log.info('New fls configuration set.')
 		except ValueError as e:
 			log.error('Got wrong configuration string!')
+
+	def evtGetState(self, msg):
+		log.info('CMS / PyTools requests our state.')
+		log.debug('[evtGetState] First funfact: we live.')
+		self.sigGetState.emit()
 
 	def run(self):
 		error = True
@@ -694,8 +700,8 @@ class eBBJsHandler(QObject):
 
 class VPlanMainWindow(QtGui.QMainWindow):
 	sigQuitEBB = pyqtSignal()
-	sigEvtAdd = pyqtSignal()
 	sigSndScrShot = pyqtSignal(QtGui.QPixmap)
+	sigSendState = pyqtSignal(QObject)
 
 	NOTIFY_PAGE = "TvVplan.processMessage('{MSG}')"
 	NOTIFY_CONFIG = "TvVplan.configChanged()"
@@ -745,8 +751,9 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.server.sigQuitEBB.connect(self.quitEBB)
 		self.server.sigNewMsg.connect(self.dsbMessage)
 		self.server.sigCrtScrShot.connect(self.createScreenshot)
-		self.sigEvtAdd.connect(self.server.addEvent)
+		self.server.sigGetState.connect(self.sendEbbState)
 		self.sigQuitEBB.connect(self.server.quitEBB)
+		self.sigSendState.connect(self.server.sendState)
 		self.sigSndScrShot.connect(self.server.sendScreenshot)
 		self.ui.webView.page().mainFrame().javaScriptWindowObjectCleared.connect(self.attachJsObj)
 		self.ebbJsHandler.sigModeChanged.connect(self.server.changeMode)
@@ -1133,6 +1140,13 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	def dsbMessage(self, msg):
 		log.info('We got a message for the ebb: %s.' % (msg.toJson(),))
 		self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_PAGE.format(MSG=msg.toJson()))
+
+	@pyqtSlot()
+	def sendEbbState(self):
+		if self.isVisible():
+			self.sigSendState.emit('online')
+		else:
+			self.sigSendState.emit('idle')
 
 	def autostart(self):
 		title = self.config.get('app', 'title')
