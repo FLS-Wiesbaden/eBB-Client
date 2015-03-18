@@ -210,7 +210,11 @@ class DsbServer(QThread):
 	def connect(self):
 		tryNr = 0
 		wait = 1
-		self.sock = SSL.Connection(self.ctx, socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+		if self.config.getboolean('connection', 'ssl'):
+			self.sock = SSL.Connection(self.ctx, socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+		else:
+			self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
 		while tryNr >= 0:
 			try:
 				self.sock.connect((self.config.get('connection', 'host'), self.config.getint('connection', 'port')))
@@ -238,7 +242,7 @@ class DsbServer(QThread):
 
 	def parseCommand(self, cmd):
 		quit = False
-		code, msg, *args = cmd.decode('utf-8').rstrip().split(' - ')
+		code, msg, *args = cmd.rstrip().split(' - ')
 		log.debug('%s: %s' % (code, msg))
 
 		# TODO: make constants for the codes similiar as in dsb.py!
@@ -248,7 +252,7 @@ class DsbServer(QThread):
 			log.info('We got a new message... analysing the target.')
 			# because the msg could contain " - " we have to recreate the data.
 			if len(args) > 0:
-				pMsg = ' - '.join([msg, ' - '.join([args])])
+				pMsg = ' - '.join([msg, ' - '.join(args)])
 			else:
 				pMsg = msg
 
@@ -477,7 +481,12 @@ class DsbServer(QThread):
 							log.error('error occurred while reading (ssl error): %s' % (e,))
 
 						if newData:
-							quit = self.parseCommand(newData)
+							quit = False
+							for cmdData in newData.decode('utf-8').split('\n'):
+								if len(cmdData.strip()) > 0:
+									quit = self.parseCommand(cmdData)
+									if quit:
+										break
 							if not quit:
 								self.poller.modify(s, DsbServer.READ_WRITE)
 							else:
