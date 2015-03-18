@@ -7,10 +7,10 @@ from ui_url import *
 from Printer import Printer
 from OpenSSL import SSL
 from configparser import SafeConfigParser
-from PyQt4.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice, QMutex, QMutexLocker, QTimer
-from PyQt4.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
-from PyQt4.QtWebKit import QWebPage
-from PyQt4 import QtGui, QtWebKit, QtCore
+from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice, QMutex, QMutexLocker, QTimer
+from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
+from PyQt5.QtWebKitWidgets import QWebPage
+from PyQt5 import QtGui, QtWebKit, QtCore, QtWidgets
 from time import sleep
 from ansistrm import ColorizingStreamHandler
 from observer import ObservableSubject, Observer, NotifyReceiver
@@ -573,9 +573,9 @@ class FlsWebPage(QWebPage):
 	def javaScriptAlert(self, frame, msg):
 		log.warning('JsAlert (%s): %s' % (frame.frameName(), msg))
 
-class VPlanAbout(QtGui.QDialog):
+class VPlanAbout(QtWidgets.QDialog):
 	def __init__(self, parentMain):
-		QtGui.QDialog.__init__(self, parent=parentMain)
+		QtWidgets.QDialog.__init__(self, parent=parentMain)
 		self.config = globConfig
 		self.numTry = 0
 
@@ -595,9 +595,9 @@ class VPlanAbout(QtGui.QDialog):
 
 		self.show()
 
-class VPlanURL(QtGui.QDialog):
+class VPlanURL(QtWidgets.QDialog):
 	def __init__(self, parentMain):
-		QtGui.QDialog.__init__(self, parent=parentMain)
+		QtWidgets.QDialog.__init__(self, parent=parentMain)
 		self.state = False
 		self.config = globConfig
 
@@ -707,7 +707,7 @@ class eBBJsHandler(QObject):
 	def logE(self, msg):
 		log.error(msg)
 
-class VPlanMainWindow(QtGui.QMainWindow):
+class VPlanMainWindow(QtWidgets.QMainWindow):
 	sigQuitEBB = pyqtSignal()
 	sigSndScrShot = pyqtSignal(QtGui.QPixmap)
 	sigSendState = pyqtSignal(QObject)
@@ -718,7 +718,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	NOTIFY_RESUME = 'TvVplan.resumeTv()'
 
 	def __init__(self):
-		QtGui.QMainWindow.__init__(self)
+		QtWidgets.QMainWindow.__init__(self)
 		self._notifyReceiver = NotifyReceiver(self)
 		self.reloader = []
 		self.config = globConfig
@@ -802,7 +802,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		log.info('Quit hard now!')
 		self.server.runState = False
 		self.server = None
-		QtGui.QApplication.quit()
+		QtWidgets.QApplication.quit()
 
 	@pyqtSlot(str)
 	def notification(self, state):
@@ -865,98 +865,98 @@ class VPlanMainWindow(QtGui.QMainWindow):
 		self.ui.progressBar.setTextVisible(self.config.getboolean('progress', 'showText'))
 		self.ui.progressBar.setObjectName('progressBar')
 		self.ui.verticalLayout.addWidget(self.ui.progressBar)
-		self.connect(self.ui.webView, QtCore.SIGNAL('loadProgress(int)'), self.ui.progressBar.setValue)
+		self.ui.webView.loadProgress.connect(self.ui.progressBar.setValue)
 
 	def disableProgressBar(self):
-		self.disconnect(self.ui.webView, QtCore.SIGNAL('loadProgress(int)'), self.ui.progressBar.setValue)
+		self.ui.webView.loadProgress.disconnect(self.ui.progressBar.setValue)
 		self.ui.progressBar.deleteLater()
 		self.ui.verticalLayout.removeWidget(self.ui.progressBar)
 		self.ui.progressBar = None
 
 	def setActions(self):
 		# Exit (Ctrl+Q)
-		self.exit = QtGui.QAction(QtGui.QIcon(''), 'Verlassen', self)
+		self.exit = QtWidgets.QAction(QtGui.QIcon(''), 'Verlassen', self)
 		self.exit.setShortcut(self.config.get('shortcuts', 'quit'))
-		self.connect(self.exit, QtCore.SIGNAL('triggered()'), QtCore.SLOT('close()'))
+		self.exit.triggered.connect(self.close)
 		self.addAction(self.exit)
 
 		# Fullscreen (F11)
-		self.fullScreen = QtGui.QAction(QtGui.QIcon(''), 'Vollbild an/aus', self)
+		self.fullScreen = QtWidgets.QAction(QtGui.QIcon(''), 'Vollbild an/aus', self)
 		self.fullScreen.setShortcut(self.config.get('shortcuts', 'fullscreen'))
-		self.connect(self.fullScreen, QtCore.SIGNAL('triggered()'), QtCore.SLOT('toggleScreen()'))
+		self.fullScreen.triggered.connect(self.toggleScreen)
 		self.addAction(self.fullScreen)
 
 		# Toggle progressbar (F9)
-		self.toggleProgress = QtGui.QAction(QtGui.QIcon(''), 'Progressbar an/aus', self)
+		self.toggleProgress = QtWidgets.QAction(QtGui.QIcon(''), 'Progressbar an/aus', self)
 		self.toggleProgress.setShortcut(self.config.get('shortcuts', 'toggleProgressBar'))
-		self.connect(self.toggleProgress, QtCore.SIGNAL('triggered()'), QtCore.SLOT('toggleProgressBar()'))
+		self.toggleProgress.triggered.connect(self.toggleProgressBar)
 		self.addAction(self.toggleProgress)
 
 		# Reload planer (F5)
-		self.actReload = QtGui.QAction(QtGui.QIcon(''), 'Neuladen', self)
+		self.actReload = QtWidgets.QAction(QtGui.QIcon(''), 'Neuladen', self)
 		self.actReload.setAutoRepeat(self.config.getboolean('browser', 'autoRepeatReload'))
 		self.actReload.setShortcut(self.config.get('shortcuts', 'reload'))
-		self.connect(self.actReload, QtCore.SIGNAL('triggered()'), self.reload)
+		self.actReload.triggered.connect(self.reload)
 		self.addAction(self.actReload)
 
 		# Browser: stop (Esc)
-		self.actStop = QtGui.QAction(QtGui.QIcon(''), 'Stop', self)
+		self.actStop = QtWidgets.QAction(QtGui.QIcon(''), 'Stop', self)
 		self.actStop.setShortcut(self.config.get('shortcuts', 'browserStop'))
-		self.connect(self.actStop, QtCore.SIGNAL('triggered()'), self.ui.webView.stop)
+		self.actStop.triggered.connect(self.ui.webView.stop)
 		self.addAction(self.actStop)
 
 		# Browser: forward (Alt+Right)
-		self.actForward = QtGui.QAction(QtGui.QIcon(''), 'Forward', self)
+		self.actForward = QtWidgets.QAction(QtGui.QIcon(''), 'Forward', self)
 		self.actForward.setShortcut(self.config.get('shortcuts', 'browserForward'))
-		self.connect(self.actForward, QtCore.SIGNAL('triggered()'), self.ui.webView.forward)
+		self.actForward.triggered.connect(self.ui.webView.forward)
 		self.addAction(self.actForward)
 
 		# Browser: Back (Alt+Left)
-		self.actBack = QtGui.QAction(QtGui.QIcon(''), 'Back', self)
+		self.actBack = QtWidgets.QAction(QtGui.QIcon(''), 'Back', self)
 		self.actBack.setShortcut(self.config.get('shortcuts', 'browserBack'))
-		self.connect(self.actBack, QtCore.SIGNAL('triggered()'), self.ui.webView.back)
+		self.actBack.triggered.connect(self.ui.webView.back)
 		self.addAction(self.actBack)
 
 		# About window (F1)
-		self.actAbout = QtGui.QAction(QtGui.QIcon(''), 'Über', self)
+		self.actAbout = QtWidgets.QAction(QtGui.QIcon(''), 'Über', self)
 		self.actAbout.setShortcut(self.config.get('shortcuts', 'about'))
-		self.connect(self.actAbout, QtCore.SIGNAL('triggered()'), QtCore.SLOT('showAbout()'))
+		self.actAbout.triggered.connect(self.showAbout)
 		self.addAction(self.actAbout)
 
 		# Go to url... (F2)
-		self.actURL = QtGui.QAction(QtGui.QIcon(''), 'Neue URL', self)
+		self.actURL = QtWidgets.QAction(QtGui.QIcon(''), 'Neue URL', self)
 		self.actURL.setAutoRepeat(False)
 		self.actURL.setShortcut(self.config.get('shortcuts', 'newURL'))
-		self.connect(self.actURL, QtCore.SIGNAL('triggered()'), QtCore.SLOT('newURL()'))
+		self.actURL.triggered.connect(self.newURL)
 		self.addAction(self.actURL)
 
 		# we will set zoom factor ;)
 		# increase Zoom factor of planer
-		self.actIncZoom = QtGui.QAction(QtGui.QIcon(''), 'Plan vergrößern', self)
+		self.actIncZoom = QtWidgets.QAction(QtGui.QIcon(''), 'Plan vergrößern', self)
 		self.actIncZoom.setShortcut(self.config.get('shortcuts', 'incZoom'))
-		self.connect(self.actIncZoom, QtCore.SIGNAL('triggered()'), QtCore.SLOT('incZoom()'))
+		self.actIncZoom.triggered.connect(self.incZoom)
 		self.addAction(self.actIncZoom)
 
 		# decrease Zoom factor of planer
-		self.actDecZoom = QtGui.QAction(QtGui.QIcon(''), 'Plan verkleinern', self)
+		self.actDecZoom = QtWidgets.QAction(QtGui.QIcon(''), 'Plan verkleinern', self)
 		self.actDecZoom.setShortcut(self.config.get('shortcuts', 'decZoom'))
-		self.connect(self.actDecZoom, QtCore.SIGNAL('triggered()'), QtCore.SLOT('decZoom()'))
+		self.actDecZoom.triggered.connect(self.decZoom)
 		self.addAction(self.actDecZoom)
 
 		# reset Zoom factor of planer
-		self.actResetZoom = QtGui.QAction(QtGui.QIcon(''), 'Planzoom zurücksetzen', self)
+		self.actResetZoom = QtWidgets.QAction(QtGui.QIcon(''), 'Planzoom zurücksetzen', self)
 		self.actResetZoom.setShortcut(self.config.get('shortcuts', 'resetZoom'))
-		self.connect(self.actResetZoom, QtCore.SIGNAL('triggered()'), QtCore.SLOT('resetZoom()'))
+		self.actResetZoom.triggered.connect(self.resetZoom)
 		self.addAction(self.actResetZoom)
 
 		# start debugger
-		self.actStartDebug = QtGui.QAction(QtGui.QIcon(''), 'Debugger starten', self)
+		self.actStartDebug = QtWidgets.QAction(QtGui.QIcon(''), 'Debugger starten', self)
 		self.actStartDebug.setShortcut(self.config.get('shortcuts', 'debugConsole'))
-		self.connect(self.actStartDebug, QtCore.SIGNAL('triggered()'), QtCore.SLOT('startDebug()'))
+		self.actStartDebug.triggered.connect(self.startDebug)
 		self.addAction(self.actStartDebug)
 
 		# Loading finished (bool) 
-		self.connect(self.ui.webView, QtCore.SIGNAL('loadFinished(bool)'), QtCore.SLOT('handleLoadReturn(bool)'))
+		self.ui.webView.loadFinished.connect(self.handleLoadReturn)
 
 		# if page requires username / password
 		self.manager.authenticationRequired.connect(self.setBasicAuth)
@@ -1138,10 +1138,15 @@ class VPlanMainWindow(QtGui.QMainWindow):
 	def createScreenshot(self):
 		if self.server.runState and self.isVisible():
 			log.debug('Create screenshot')
-			scrShot = QtGui.QPixmap.grabWidget(self)
-			if self.config.getint('options', 'scrShotSize') > 0:
-				scrShot = scrShot.scaledToWidth(self.config.getint('options', 'scrShotSize'))
-			self.sigSndScrShot.emit(scrShot)
+			win = QtGui.QGuiApplication.topLevelWindows()
+			if len(win) > 0:
+				win = win[0]
+				screen = QtGui.QGuiApplication.primaryScreen()
+				if screen:
+					scrShot = screen.grabWindow(win.winId())
+					if self.config.getint('options', 'scrShotSize') > 0:
+						scrShot = scrShot.scaledToWidth(self.config.getint('options', 'scrShotSize'))
+					self.sigSndScrShot.emit(scrShot)
 		else:
 			log.debug('Screenshot canceled (runState: %s ; Visible: %s).' % (self.server.runState, self.isVisible()))
 
@@ -1159,7 +1164,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 
 	def autostart(self):
 		title = self.config.get('app', 'title')
-		self.setWindowTitle(QtGui.QApplication.translate("MainWindow", title, None, QtGui.QApplication.UnicodeUTF8))
+		self.setWindowTitle(QtWidgets.QApplication.translate("MainWindow", title, None))
 
 		self.setActions()
 		# enable progressbar ?
@@ -1174,7 +1179,7 @@ class VPlanMainWindow(QtGui.QMainWindow):
 			reloader = VPlanReloader('webView', self.config.getint('browser', 'reloadEvery'))
 			self.config.addObserver(reloader)
 			self.reloader.append(reloader)
-			self.connect(reloader, QtCore.SIGNAL('reloader(QString)'), self.reloadChild)
+			self.reloader.reloader.connect(self.reloadChild)
 			self.ui.webView.loadFinished.connect(reloader.pageLoaded)
 
 if __name__ == "__main__":
@@ -1188,7 +1193,7 @@ if __name__ == "__main__":
 	with open('vclient.pid', 'w') as f:
 		f.write('%i' % (os.getpid(),))
 	subprocess.call(shlex.split('xset dpms 0 0 0'))
-	app = QtGui.QApplication(sys.argv)
+	app = QtWidgets.QApplication(sys.argv)
 	ds = VPlanMainWindow()
 	ds.start()
 	app.exec_()

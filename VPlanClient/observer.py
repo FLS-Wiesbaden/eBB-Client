@@ -1,5 +1,5 @@
 import abc
-from PyQt4.QtCore import pyqtSignal, QObject, pyqtSlot
+from PyQt5.QtCore import pyqtSignal, QObject, pyqtSlot
 
 class ObserverNotifier(QObject):
 	sigNotification = pyqtSignal(str)

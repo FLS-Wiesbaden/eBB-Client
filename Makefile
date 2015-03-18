@@ -13,8 +13,8 @@ COMPILED_UI = $(UI_FILES:%.ui=$(buildDir)/$(PACKAGE)/ui_%.py)
 COMPILED_RESOURCES = $(RESOURCES:%.qrc=$(buildDir)/$(PACKAGE)/%_rc.py)
 COMPILED_PYTHONS = $(PYTHONS:%.py=$(buildDir)/%.py)
 
-PYUIC = pyuic4
-PYRCC = pyrcc4
+PYUIC = pyuic5
+PYRCC = pyrcc5
 PYTHON = python3
 PYPARM = 
 
@@ -45,7 +45,7 @@ $(buildDir)/$(PACKAGE)/ui_%.py: $(UI_DIR)/%.ui
 	$(PYUIC) $(debugFlg) $< -o $@
  
 $(buildDir)/$(PACKAGE)/%_rc.py: $(RESOURCE_DIR)/%.qrc
-	$(PYRCC) -py3 $< -o $@
+	$(PYRCC) $< -o $@
 
 clean:
 	$(RM) -rvf $(COMPILED_UI)
