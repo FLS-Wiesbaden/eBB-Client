@@ -587,7 +587,7 @@ class VPlanAbout(QtWidgets.QDialog):
 	def autostart(self):
 		# wait - what should i do?
 		# set version!
-		self.ui.textVersion.setText(_fromUtf8(self.config.get('app', 'version')))
+		self.ui.textVersion.setText(str(__version__))
 		self.ui.textVersionQt.setText(
 				'PyQt-Version: %s / Qt-Version: %s' % (QtCore.PYQT_VERSION_STR, QtCore.QT_VERSION_STR)
 		)
