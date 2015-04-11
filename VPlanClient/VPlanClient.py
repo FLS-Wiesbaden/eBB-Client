@@ -21,6 +21,7 @@ from hashlib import sha512
 from struct import Struct
 from dsbmessage import DsbMessage
 from logging.handlers import WatchedFileHandler
+from urllib.request import urlopen, URLopener
 from urllib.parse import urlencode
 import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex, subprocess, zlib
 import binascii, pickle, base64, traceback, urllib, urllib.request
