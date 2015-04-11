@@ -22,8 +22,8 @@ from struct import Struct
 from dsbmessage import DsbMessage
 from logging.handlers import WatchedFileHandler
 from urllib.parse import urlencode
-import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex, subprocess, zlib, binascii, pickle
-import traceback, urllib, urllib.request
+import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex, subprocess, zlib, 
+import binascii, pickle, base64, traceback, urllib, urllib.request
 
 __author__  = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2015 Website-Team Friedrich-List-Schule-Wiesbaden'
@@ -168,40 +168,37 @@ class DsbServer(QThread):
 			# Read QByteArray containing PNG into a StringIO.
 			string_io = BytesIO(byte_array)
 			string_io.seek(0)
-			#data = zlib.compress(string_io.getvalue(), 9)
-			#
-			#self.addData('screenshot;chksum;%i:%s' % (len(data),sha512(data).hexdigest()))
-                        #
-			#data = Struct('%is'%(len(data),)).pack(data)
-			#data = binascii.hexlify(data).decode('utf-8')
-			#i = 0
-			#for pos in range(0, len(data), 2048):
-			#	self.addData('screenshot;%i;%s' % (i, data[pos:pos+2048]))
-			#	i += 1
-                        #
-			#self.addData('screenshot;eof;%i' % (i,))
 			url = self.scrShotUrl
 			if url is not None and len(url.strip()) > 0:
 				log.debug('Try to open URL: %s' % (url,))
-				headers = {'Content-type': 'application/x-www-form-urlencoded'}
 				img = string_io.getvalue()
-				req = urllib.request.Request(
-					url, 
-					urlencode({'img': img}).encode('utf-8'), 
-					headers, method='POST'
+				data = {'img': img}
+
+				# Set the opener with private, public key.
+				opener = URLopener(
+					key_file=self.connection.get('connection', 'privKey'),
+					cert_file=self.connection.get('connection', 'pubKey'),
+					cafile=self.connection.get('connection', 'caCert')
 				)
-				# disabled: please set the http[s]_proxy-Env-Variables.
-				#if self.config.getboolean('proxy', 'enable'):
-				#	req.set_proxy('%s%s' % (self.config.get('proxy', 'host'), self.config.get('proxy', 'port')), 'http')
-				#	req.set_proxy('%s%s' % (self.config.get('proxy', 'host'), self.config.get('proxy', 'port')), 'https')
+
+				# Do we have basic auth?
+				if len(self.connection.get('connection', 'username').strip()) > 0:
+					authEncoded = base64.b64encode(
+						('%s:%s' % (self.connection.get('connection', 'username'), 
+							self.connection.get('connection', 'password'))).encode('utf-8')
+					).decode('utf-8')[:-1]
+					opener.addheader("Authorization", 'Basic %s' % (authEncoded,))
+
+				# We send data through POST.
+				opener.addheader('Content-type', 'application/x-www-form-urlencoded')
 				try:
-					r = urllib.request.urlopen(req)
-					content = r.read().decode('utf-8')
+					r = opener.open(url, None if data is None else urlencode(data))
+					content = r.readline().decode('utf-8')
 					log.debug('Got data: %s' % (content,))
 					if r.code == 200:
 						log.debug('Got data with success')
 					else:
-						log.error('Got wrong status code from cmsGot wrong status code from cms..')
+						log.error('Got wrong status code from cms...')
 				except Exception as e:
 					log.error('Could not open %s (%s)' % (url, str(e)))
 			self.addData('screenshot;update;')
@@ -514,7 +511,8 @@ class DsbServer(QThread):
 							nextMsg = self.data.get_nowait()
 						except queue.Empty:
 							self.poller.modify(s, DsbServer.READ_ONLY)
-						else: 
+						else:
+							nextMsg += '\n'
 							if not nextMsg.startswith('screenshot'):
 								log.debug('sending msg %s' % (nextMsg,))
 								s.sendall(nextMsg.encode('utf-8'))
@@ -537,6 +535,7 @@ class DsbServer(QThread):
 		except queue.Empty:
 			log.debug('output queue is empty.')
 		else:
+			nextMsg += '\n'
 			log.debug('sending data')
 			self.sock.send(nextMsg.encode('utf-8'))
 
