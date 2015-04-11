@@ -22,7 +22,7 @@ from struct import Struct
 from dsbmessage import DsbMessage
 from logging.handlers import WatchedFileHandler
 from urllib.parse import urlencode
-import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex, subprocess, zlib, 
+import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex, subprocess, zlib
 import binascii, pickle, base64, traceback, urllib, urllib.request
 
 __author__  = 'Lukas Schreiner'
