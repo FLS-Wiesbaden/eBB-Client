@@ -177,16 +177,16 @@ class DsbServer(QThread):
 
 				# Set the opener with private, public key.
 				opener = URLopener(
-					key_file=self.connection.get('connection', 'privKey'),
-					cert_file=self.connection.get('connection', 'pubKey'),
-					cafile=self.connection.get('connection', 'caCert')
+					key_file=self.cofig.get('connection', 'privKey'),
+					cert_file=self.cofig.get('connection', 'pubKey'),
+					cafile=self.cofig.get('connection', 'caCert')
 				)
 
 				# Do we have basic auth?
-				if len(self.connection.get('connection', 'username').strip()) > 0:
+				if len(self.cofig.get('connection', 'username').strip()) > 0:
 					authEncoded = base64.b64encode(
-						('%s:%s' % (self.connection.get('connection', 'username'), 
-							self.connection.get('connection', 'password'))).encode('utf-8')
+						('%s:%s' % (self.cofig.get('connection', 'username'), 
+							self.cofig.get('connection', 'password'))).encode('utf-8')
 					).decode('utf-8')[:-1]
 					opener.addheader("Authorization", 'Basic %s' % (authEncoded,))
 
