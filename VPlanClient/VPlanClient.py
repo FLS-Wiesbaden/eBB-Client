@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # vim: fenc=utf-8:ts=4:sw=4:si:sta:noet
-from ui_browser import *
-from ui_about import *
-from ui_url import *
 from Printer import Printer
 from OpenSSL import SSL
 from configparser import SafeConfigParser
-from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice, QMutex, QMutexLocker, QTimer
+from html.parser import HTMLParser
+from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice, QMutex
+from PyQt5.QtCore import QMutexLocker, QTimer, QUrl, QVariant, QFile, QFileInfo
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
 from PyQt5.QtWebKitWidgets import QWebPage
+from PyQt5.QtQuick import QQuickView
+from PyQt5.QtQml import qmlRegisterType
+from PyQt5.QtGui import QScreen
 from PyQt5 import QtGui, QtWebKit, QtCore, QtWidgets
 from time import sleep
 from ansistrm import ColorizingStreamHandler
@@ -22,13 +24,14 @@ from struct import Struct
 from dsbmessage import DsbMessage
 from logging.handlers import WatchedFileHandler
 from urllib.request import urlopen, URLopener
-from urllib.parse import urlencode
-import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex, subprocess, zlib
-import binascii, pickle, base64, traceback, urllib, urllib.request
+from urllib.parse import urlencode, urljoin
+import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex
+import binascii, pickle, base64, traceback, urllib, urllib.request, subprocess, zlib, datetime
+import popplerqt5, shutil
 
 __author__  = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2015 Website-Team Friedrich-List-Schule-Wiesbaden'
-__version__ = 0.8
+__version__ = 0.9
 
 FORMAT = '%(asctime)-15s %(message)s'
 formatter = logging.Formatter(FORMAT, datefmt='%b %d %H:%M:%S')
@@ -42,6 +45,7 @@ workDir = os.path.dirname(os.path.realpath(__file__))
 # global config
 globConfig = FLSConfiguration(os.path.join(workDir,'config.ini'))
 flsConfig = FLSConfiguration()
+ds = None
 
 try:
 	_fromUtf8 = QtCore.QString.fromUtf8
@@ -72,6 +76,9 @@ class DsbServer(QThread):
 	sigNewMsg  = pyqtSignal(DsbMessage)
 	sigCrtScrShot = pyqtSignal()
 	sigGetState = pyqtSignal()
+	urlLoaded = pyqtSignal()
+	connected = pyqtSignal()
+	disconnected = pyqtSignal()
 
 	# Commonly used flag setes
 	READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
@@ -91,7 +98,14 @@ class DsbServer(QThread):
 		self.flsConfig.addObserver(self)
 		self.scrshotSend = True
 		self.machineId = None
+
+		# obtain them from pyTools.
+		self.baseUrl = None
 		self.scrShotUrl = None
+		self.loadPlanUrl = None
+		self.loadNewsUrl = None
+		self.loadAnnouncementUrl = None
+		self.loadContentUrl = None
 
 		# Initialize context
 		self.ctx = SSL.Context(SSL.TLSv1_2_METHOD)
@@ -236,6 +250,8 @@ class DsbServer(QThread):
 				)
 			)
 
+		self.connected.emit()
+
 		return True if tryNr == -1 else False
 
 	def parseCommand(self, cmd):
@@ -262,7 +278,7 @@ class DsbServer(QThread):
 		elif code == '204':
 			self.config.set('connection', 'dsbName', msg)
 			self.addData('getConfig;;')
-			self.addData('getScrShotUrl;;')
+			self.addData('getUrls;;')
 		elif code == '303':
 			log.info('Ok. Version is sufficient but there is a new version?')
 			# FIXME update the vplan client?
@@ -302,7 +318,14 @@ class DsbServer(QThread):
 			self.sigQuitEBB.emit()
 		elif code == '701':
 			# now we got the url.
-			self.scrShotUrl = msg
+			urls = json.loads(msg)
+			self.baseUrl = urls['base']
+			self.scrShotUrl = urls['screenshot']
+			self.loadPlanUrl = urls['plan'] + '?raw=1&clientId=' + self.getMachineID()
+			self.loadNewsUrl = urls['news'] + '?raw=1&clientId=' + self.getMachineID()
+			self.loadAnnouncementUrl = urls['announcement'] + '?raw=1&clientId=' + self.getMachineID()
+			self.loadContentUrl = urls['content'] + '?raw=1&clientId=' + self.getMachineID()
+			self.urlLoaded.emit()
 
 		return quit
 
@@ -530,6 +553,8 @@ class DsbServer(QThread):
 						s.close()
 						self.sock = None
 
+			self.disconnected.emit()
+
 	def sendNextRequest(self):
 		try:
 			nextMsg = self.data.get_nowait()
@@ -562,99 +587,41 @@ class DsbServer(QThread):
 		except Exception as e:
 			log.error('Could not close connection: %s' % (e,))
 
-class FlsWebPage(QWebPage):
-	
+class EbbJsHandler(QObject):
+	siteReload = pyqtSignal()
+	flsConfigLoaded = pyqtSignal()
+	ebbConfigLoaded = pyqtSignal()
+	connected = pyqtSignal()
+	suspendTv = pyqtSignal()
+	resumeTv = pyqtSignal()
+	newsAdded = pyqtSignal([QVariant], arguments=['news'])
+	newsUpdate = pyqtSignal([QVariant], arguments=['news'])
+	newsDeleted = pyqtSignal([QVariant], arguments=['newsId'])
+	announcementAdded = pyqtSignal([QVariant], arguments=['anno'])
+	announcementUpdate = pyqtSignal([QVariant], arguments=['anno'])
+	announcementDelete = pyqtSignal([QVariant], arguments=['annoId'])
+	planAvailable = pyqtSignal([QVariant, QVariant, str], arguments=['newDayList', 'newPlanList', 'newStand'])
+	planColSizeChanged = pyqtSignal([QVariant], arguments=['planSizes'])
+	cycleTimesChanged = pyqtSignal([QVariant, QVariant, QVariant, QVariant], arguments=['newsTime', 'annoTime', 'planTime', 'contentTime'])
+
 	def __init__(self, parent=None):
-		super(FlsWebPage, self).__init__(parent)
-
-	def javaScriptConsoleMessage(self, msg, lineNumber, sourceID):
-		log.debug("JsConsole(%s:%d): %s" % (sourceID, lineNumber, msg))
-
-	def javaScriptAlert(self, frame, msg):
-		log.warning('JsAlert (%s): %s' % (frame.frameName(), msg))
-
-class VPlanAbout(QtWidgets.QDialog):
-	def __init__(self, parentMain):
-		QtWidgets.QDialog.__init__(self, parent=parentMain)
-		self.config = globConfig
-		self.numTry = 0
-
-		self.ui = Ui_About()
-		self.ui.setupUi(self)
-
-		self.autostart()
-
-	def autostart(self):
-		# wait - what should i do?
-		# set version!
-		self.ui.textVersion.setText(str(__version__))
-		self.ui.textVersionQt.setText(
-				'PyQt-Version: %s / Qt-Version: %s' % (QtCore.PYQT_VERSION_STR, QtCore.QT_VERSION_STR)
-		)
-		self.ui.textVersionPy.setText(sys.version)
-
-		self.show()
-
-class VPlanURL(QtWidgets.QDialog):
-	def __init__(self, parentMain):
-		QtWidgets.QDialog.__init__(self, parent=parentMain)
-		self.state = False
-		self.config = globConfig
-
-		self.ui = Ui_VPlanURL()
-		self.ui.setupUi(self)
-
-		self.autostart()
-
-	def accept(self):
-		self.state = True
-		super().accept()
-
-	def autostart(self):
-		self.show()
-
-class VPlanReloader(QThread):
-	"""it is an observer !!!"""
-	def __init__(self, widget, reloadTime, parent = None):
-		QThread.__init__(self, parent)
-		self.lock = False
-		self.exiting = False
-		self.reloadTime = reloadTime
-		self.widget = widget
-
-		self.start()
-
-	def run(self):
-		while not self.exiting:
-			sleep(self.reloadTime)
-			if not self.lock:
-				self.lock = True
-				self.emit(QtCore.SIGNAL('reloader(QString)'), self.widget)
-
-	@pyqtSlot(bool)
-	def pageLoaded(self, state):
-		self.lock = False
-
-	@pyqtSlot(str)
-	def notification(self, state):
-		if state == 'configChanged':
-			self.reloadTime = globConfig.get('browser', 'reloadEvery')
-			if self.reloadTime <= 0:
-				self.stop()
-
-	def __del__(self):
-		self.exiting = True
-		self.wait() 
-
-class eBBJsHandler(QObject):
-	sigModeChanged = pyqtSignal(str)
-	sigReload = pyqtSignal()
-
-	def __init__(self, config, flscfg):
-		QObject.__init__(self)
-		self.ebbConfig = config
-		self.flsConfig = flscfg
+		QObject.__init__(self, parent)
+		self.ebbConfig = None
+		self.flsConfig = None
 		self.ready = False
+		self.maxEntries = 0
+
+	def setEbbConfig(self, config):
+		self.ebbConfig = config
+		self.ebbConfigLoaded.emit()
+
+	def setFlsConfig(self, config):
+		self.flsConfig = config
+		self.flsConfigLoaded.emit()
+
+	@pyqtSlot(int)
+	def setMaxEntries(self, no):
+		self.maxEntries = no
 
 	@pyqtSlot()
 	def ready(self):
@@ -668,7 +635,7 @@ class eBBJsHandler(QObject):
 
 	@pyqtSlot()
 	def reload(self):
-		self.sigReload.emit()
+		self.siteReload.emit()
 		log.info('js wants me to reload!')
 
 	def _config(self):
@@ -680,55 +647,119 @@ class eBBJsHandler(QObject):
 	def _machineId(self):
 		return self.ebbConfig.get('connection', 'machineId')
 
+	def _showFutureDays(self):
+		# school start
+		if self.ebbConfig.getboolean('appearance', 'filter_tomorrow'):
+			now = datetime.datetime.now()
+			after  = self.flsConfig.getint('vplan', 'school_start')
+			after += self.ebbConfig.getint('appearance', 'filter_tomorrow_time')
+			base  = datetime.datetime.now().replace(hour=0, minute=0, second=0)
+			base += datetime.timedelta(minutes=after)
+			return now >= base
+		else: 
+			return True
+
+	@pyqtSlot()
+	def onConnected(self):
+		self.connected.emit()
+
 	config = pyqtProperty(str, fget=_config)
 	flscfg = pyqtProperty(str, fget=_flsConfig)
 	machineId = pyqtProperty(str, fget=_machineId)
+	showFutureDays = pyqtProperty(bool, fget=_showFutureDays)
 
-	@pyqtSlot(str)
-	def modeChanged(self, mode):
-		self.sigModeChanged.emit(mode)
-		self.flsConfig.set('app', 'mode', mode)
-		self.flsConfig.save(False)
-		log.info('Mode changed: %s' % (mode,))
+class EbbContentHandler(QObject):
+	modeChanged = pyqtSignal(QVariant, arguments=['toMode'])
+	flsConfigLoaded = pyqtSignal()
+	ebbConfigLoaded = pyqtSignal()
+	connected = pyqtSignal()
+	suspendTv = pyqtSignal()
+	resumeTv = pyqtSignal()
+	# presenter
+	contentAssigned = pyqtSignal()
+	contentDeassigned = pyqtSignal()
+	pageAdded = pyqtSignal([QVariant], arguments=['pdfPagePath'])
+	# content page
+	contentBodyChanged = pyqtSignal()
+	contentArrowChanged = pyqtSignal([float], arguments=['newDirection'])
+	# firealarm page
+	fireArrowChanged = pyqtSignal([float], arguments=['newDirection'])
 
-	@pyqtSlot(str)
-	def logD(self, msg):
-		log.debug(msg)
+	def __init__(self, parent=None):
+		QObject.__init__(self, parent)
+		self.ebbConfig = None
+		self.flsConfig = None
+		self.prevContentArrow = 0
+		self.prevFireArrow = 0
+		self.currentMode = 'default'
+		self.contentBody = ''
 
-	@pyqtSlot(str)
-	def logI(self, msg):
-		log.info(msg)
+	def setEbbConfig(self, config):
+		self.ebbConfig = config
+		self.ebbConfigLoaded.emit()
+		if self.prevContentArrow != self.ebbConfig.getfloat('appearance', 'content_direction'):
+			self.contentArrowChanged.emit(self._contentArrow())
+			self.prevContentArrow = self.ebbConfig.getfloat('appearance', 'content_direction')
+		if self.prevFireArrow != self.ebbConfig.getfloat('appearance', 'escape_route_direction'):
+			self.fireArrowChanged.emit(self._fireArrow())
+			self.prevFireArrow = self.ebbConfig.getfloat('appearance', 'escape_route_direction')
+		if self.currentMode != self.ebbConfig.get('app', 'mode'):
+			self.currentMode = self.ebbConfig.get('app', 'mode')
+			self.modeChanged.emit(self.currentMode)
 
-	@pyqtSlot(str)
-	def logW(self, msg):
-		log.warning(msg)
+	def setFlsConfig(self, config):
+		self.flsConfig = config
+		self.flsConfigLoaded.emit()
 
-	@pyqtSlot(str)
-	def logE(self, msg):
-		log.error(msg)
+	def _config(self):
+		return self.ebbConfig.toJson()
 
-class VPlanMainWindow(QtWidgets.QMainWindow):
+	def _flsConfig(self):
+		return self.flsConfig.toJson()
+
+	def _machineId(self):
+		return self.ebbConfig.get('connection', 'machineId')
+
+	def _contentArrow(self):
+		return self.ebbConfig.getfloat('appearance', 'content_direction')
+
+	def _contentBody(self):
+		return QVariant(self.contentBody)
+
+	def _fireArrow(self):
+		return self.ebbConfig.getfloat('appearance', 'escape_route_direction')
+
+	config = pyqtProperty(str, fget=_config)
+	flscfg = pyqtProperty(str, fget=_flsConfig)
+	machineId = pyqtProperty(str, fget=_machineId)
+	contentArrow = pyqtProperty(float, fget=_contentArrow)
+	contentText = pyqtProperty(QVariant, fget=_contentBody)
+	fireArrow = pyqtProperty(float, fget=_fireArrow)
+
+	@pyqtSlot()
+	def onConnected(self):
+		self.connected.emit()
+
+class VPlanMainWindow(QQuickView):
 	sigQuitEBB = pyqtSignal()
 	sigSndScrShot = pyqtSignal(QtGui.QPixmap)
-	sigSendState = pyqtSignal(QObject)
+	sigSendState = pyqtSignal(QVariant)
+	sysTermSignal = pyqtSignal()
 
-	NOTIFY_PAGE = "TvVplan.processMessage('{MSG}')"
-	NOTIFY_CONFIG = "TvVplan.configChanged()"
-	NOTIFY_SUSPEND = 'TvVplan.suspendTv()'
-	NOTIFY_RESUME = 'TvVplan.resumeTv()'
-
-	def __init__(self):
+	def __init__(self, app):
 		QtWidgets.QMainWindow.__init__(self)
+		global flsConfig
+		global globConfig
 		self._notifyReceiver = NotifyReceiver(self)
-		self.reloader = []
 		self.config = globConfig
 		self.config.addObserver(self)
-		self.flsConfig = globConfig
-		#self.flsConfig.addObserver(self)
+		self.flsConfig = flsConfig
+		self.flsConfig.addObserver(self)
 		self.server = None
 		self.timer = None
 		self.inspector = None
 		self.loaded = False
+		self.app = app
 
 		# our screenshot timer.
 		self.scrShotTimer = QTimer()
@@ -736,22 +767,26 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 		self.scrShotTimer.setInterval(self.config.getint('options', 'scrShotInterval')*1000)
 		self.scrShotTimer.timeout.connect(self.createScreenshot)
 
-		self.ui = Ui_MainWindow()
-		self.ui.setupUi(self)
-		self.ebbJsHandler = eBBJsHandler(self.config, self.flsConfig)
+		self.setTitle(self.config.get('app', 'title'))
+		self.setSource(QUrl('ui/main.qml'))
+		self.setResizeMode(QQuickView.SizeRootObjectToView)
+
+		rootContext = self.rootContext()
+		rootObject = self.rootObject()
+		self.ebbJsHandler = rootObject.findChild(EbbJsHandler, 'ebbJsHandler')
+		self.ebbJsHandler.setEbbConfig(self.config)
+		self.ebbJsHandler.setFlsConfig(self.flsConfig)
+		self.ebbContentHandler = rootObject.findChild(EbbContentHandler, 'ebbContentHandler')
+		self.ebbContentHandler.setEbbConfig(self.config)
+		self.ebbContentHandler.setFlsConfig(self.flsConfig)
 
 		self.manager = QNetworkAccessManager()
-		self.webpage = FlsWebPage()
-		self.webpage.setNetworkAccessManager(self.manager)
-		self.ui.webView.setPage(self.webpage)
-		if self.config.get('debug', 'enabled'):
-			self.ui.webView.settings().setAttribute(QtWebKit.QWebSettings.DeveloperExtrasEnabled, True)
-		# enable js-object
-		self.ui.webView.page().mainFrame().addToJavaScriptWindowObject('ebbClient', self.ebbJsHandler)
+		self.manager.finished.connect(self.dataLoadFinished)
 
 		self.enableCache()
 		self.enableProxy()
-		self.autostart()
+		
+		self.setActions()
 
 	def start(self):
 		self.server = DsbServer(self)
@@ -761,13 +796,13 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 		self.server.sigNewMsg.connect(self.dsbMessage)
 		self.server.sigCrtScrShot.connect(self.createScreenshot)
 		self.server.sigGetState.connect(self.sendEbbState)
+		self.server.urlLoaded.connect(self.loadPlanData)
 		self.sigQuitEBB.connect(self.server.quitEBB)
 		self.sigSendState.connect(self.server.sendState)
 		self.sigSndScrShot.connect(self.server.sendScreenshot)
-		self.ui.webView.page().mainFrame().javaScriptWindowObjectCleared.connect(self.attachJsObj)
-		self.ebbJsHandler.sigModeChanged.connect(self.server.changeMode)
-		self.ui.webView.page().mainFrame().loadStarted.connect(self.ebbJsHandler.notReady)
-		self.ebbJsHandler.sigReload.connect(self.reload)
+		self.ebbContentHandler.modeChanged.connect(self.server.changeMode)
+		self.server.connected.connect(self.ebbJsHandler.onConnected)
+		self.server.connected.connect(self.ebbContentHandler.onConnected)
 
 		self.server.start()
 
@@ -780,18 +815,16 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 		e.ignore()
 
 	@pyqtSlot()
-	def reload(self):
-		if self.diskCache is not None:
-			log.info('Clear cache and reload page')
-			self.diskCache.clear()
-
-		self.ui.webView.reload()
+	def handleTermSignal(self):
+		log.info('Got a term signal (SIGTERM). Quitting.')
+		self.sigQuitEBB.emit()
 
 	@pyqtSlot()
 	def quitEBB(self):
 		self.scrShotTimer.stop()
 		log.info('Quitting eBB. Wait 5 sec. for communication with pyTools.')
-		# wait 2 sec!
+		self.hide()
+		# wait 5 sec!
 		self.timer = QTimer()
 		self.timer.setInterval(5000)
 		self.timer.setSingleShot(True)
@@ -811,30 +844,15 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 			if timerActive:
 				self.scrShotTimer.stop()
 			self.scrShotTimer.setInterval(self.config.getint('options', 'scrShotInterval')*1000)
-			if timerActive:
+			if self.config.getint('options', 'scrShotInterval') > 0:
 				self.scrShotTimer.start()
 			del timerActive
-			# changed the url?
-			if self.config.get('app', 'url') != self.ui.webView.page().mainFrame().url().toString() \
-					and self.loaded:
-				self.loadUrl()
-			elif self.ebbJsHandler.ready:
-				# now inform ebb
-				log.info('Notifiy eBB (JS) about configuration change.')
-				self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_CONFIG)
 
-		if self.config.get('debug', 'enabled'):
-			self.ui.webView.settings().setAttribute(QtWebKit.QWebSettings.DeveloperExtrasEnabled, True)
-		else:
-			self.ui.webView.settings().setAttribute(QtWebKit.QWebSettings.DeveloperExtrasEnabled, False)
-
-	@pyqtSlot()
-	def attachJsObj(self):
-		self.ui.webView.page().mainFrame().addToJavaScriptWindowObject('ebbClient', self.ebbJsHandler)
-
-	def reloadChild(self, widget):
-		if widget == 'webView':
-			self.ui.webView.reload()
+			# inform the two js handlers.
+			self.ebbJsHandler.setFlsConfig(self.flsConfig)
+			self.ebbJsHandler.setEbbConfig(self.config)
+			self.ebbContentHandler.setFlsConfig(self.flsConfig)
+			self.ebbContentHandler.setEbbConfig(self.config)
 
 	def enableCache(self):
 		self.diskCache = QNetworkDiskCache()
@@ -857,152 +875,11 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 			self.manager.setProxy(self.proxy)
 			QNetworkProxy.setApplicationProxy(self.proxy)
 
-	def enableProgressBar(self):
-		self.ui.progressBar = QtGui.QProgressBar(self.ui.centralwidget)
-		self.ui.progressBar.setMaximumSize(QtCore.QSize(16777215, self.config.getfloat('progress', 'maxHeight')))
-		self.ui.progressBar.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
-		self.ui.progressBar.setProperty("value", 0)
-		self.ui.progressBar.setTextVisible(self.config.getboolean('progress', 'showText'))
-		self.ui.progressBar.setObjectName('progressBar')
-		self.ui.verticalLayout.addWidget(self.ui.progressBar)
-		self.ui.webView.loadProgress.connect(self.ui.progressBar.setValue)
-
-	def disableProgressBar(self):
-		self.ui.webView.loadProgress.disconnect(self.ui.progressBar.setValue)
-		self.ui.progressBar.deleteLater()
-		self.ui.verticalLayout.removeWidget(self.ui.progressBar)
-		self.ui.progressBar = None
-
 	def setActions(self):
-		# Exit (Ctrl+Q)
-		self.exit = QtWidgets.QAction(QtGui.QIcon(''), 'Verlassen', self)
-		self.exit.setShortcut(self.config.get('shortcuts', 'quit'))
-		self.exit.triggered.connect(self.close)
-		self.addAction(self.exit)
-
-		# Fullscreen (F11)
-		self.fullScreen = QtWidgets.QAction(QtGui.QIcon(''), 'Vollbild an/aus', self)
-		self.fullScreen.setShortcut(self.config.get('shortcuts', 'fullscreen'))
-		self.fullScreen.triggered.connect(self.toggleScreen)
-		self.addAction(self.fullScreen)
-
-		# Toggle progressbar (F9)
-		self.toggleProgress = QtWidgets.QAction(QtGui.QIcon(''), 'Progressbar an/aus', self)
-		self.toggleProgress.setShortcut(self.config.get('shortcuts', 'toggleProgressBar'))
-		self.toggleProgress.triggered.connect(self.toggleProgressBar)
-		self.addAction(self.toggleProgress)
-
-		# Reload planer (F5)
-		self.actReload = QtWidgets.QAction(QtGui.QIcon(''), 'Neuladen', self)
-		self.actReload.setAutoRepeat(self.config.getboolean('browser', 'autoRepeatReload'))
-		self.actReload.setShortcut(self.config.get('shortcuts', 'reload'))
-		self.actReload.triggered.connect(self.reload)
-		self.addAction(self.actReload)
-
-		# Browser: stop (Esc)
-		self.actStop = QtWidgets.QAction(QtGui.QIcon(''), 'Stop', self)
-		self.actStop.setShortcut(self.config.get('shortcuts', 'browserStop'))
-		self.actStop.triggered.connect(self.ui.webView.stop)
-		self.addAction(self.actStop)
-
-		# Browser: forward (Alt+Right)
-		self.actForward = QtWidgets.QAction(QtGui.QIcon(''), 'Forward', self)
-		self.actForward.setShortcut(self.config.get('shortcuts', 'browserForward'))
-		self.actForward.triggered.connect(self.ui.webView.forward)
-		self.addAction(self.actForward)
-
-		# Browser: Back (Alt+Left)
-		self.actBack = QtWidgets.QAction(QtGui.QIcon(''), 'Back', self)
-		self.actBack.setShortcut(self.config.get('shortcuts', 'browserBack'))
-		self.actBack.triggered.connect(self.ui.webView.back)
-		self.addAction(self.actBack)
-
-		# About window (F1)
-		self.actAbout = QtWidgets.QAction(QtGui.QIcon(''), 'Über', self)
-		self.actAbout.setShortcut(self.config.get('shortcuts', 'about'))
-		self.actAbout.triggered.connect(self.showAbout)
-		self.addAction(self.actAbout)
-
-		# Go to url... (F2)
-		self.actURL = QtWidgets.QAction(QtGui.QIcon(''), 'Neue URL', self)
-		self.actURL.setAutoRepeat(False)
-		self.actURL.setShortcut(self.config.get('shortcuts', 'newURL'))
-		self.actURL.triggered.connect(self.newURL)
-		self.addAction(self.actURL)
-
-		# we will set zoom factor ;)
-		# increase Zoom factor of planer
-		self.actIncZoom = QtWidgets.QAction(QtGui.QIcon(''), 'Plan vergrößern', self)
-		self.actIncZoom.setShortcut(self.config.get('shortcuts', 'incZoom'))
-		self.actIncZoom.triggered.connect(self.incZoom)
-		self.addAction(self.actIncZoom)
-
-		# decrease Zoom factor of planer
-		self.actDecZoom = QtWidgets.QAction(QtGui.QIcon(''), 'Plan verkleinern', self)
-		self.actDecZoom.setShortcut(self.config.get('shortcuts', 'decZoom'))
-		self.actDecZoom.triggered.connect(self.decZoom)
-		self.addAction(self.actDecZoom)
-
-		# reset Zoom factor of planer
-		self.actResetZoom = QtWidgets.QAction(QtGui.QIcon(''), 'Planzoom zurücksetzen', self)
-		self.actResetZoom.setShortcut(self.config.get('shortcuts', 'resetZoom'))
-		self.actResetZoom.triggered.connect(self.resetZoom)
-		self.addAction(self.actResetZoom)
-
-		# start debugger
-		self.actStartDebug = QtWidgets.QAction(QtGui.QIcon(''), 'Debugger starten', self)
-		self.actStartDebug.setShortcut(self.config.get('shortcuts', 'debugConsole'))
-		self.actStartDebug.triggered.connect(self.startDebug)
-		self.addAction(self.actStartDebug)
-
-		# Loading finished (bool) 
-		self.ui.webView.loadFinished.connect(self.handleLoadReturn)
-
+		# handler
+		self.sysTermSignal.connect(self.handleTermSignal)
 		# if page requires username / password
 		self.manager.authenticationRequired.connect(self.setBasicAuth)
-
-	@pyqtSlot(bool)
-	def handleLoadReturn(self, success):
-		if not success:
-			log.error('Selected page could not be loaded.')
-			errorPage = """
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-	<head>
-		<title>eBlackboard: Ladefehler</title>
-		<style type="text/css">
-			html{background:#A0A0A0}body{margin:0;padding:0 1em;color:#000;font:message-box}h1{margin:0 0 .6em 0;border-bottom:1px solid ThreeDLightShadow;font-size:160%}ul,ol{margin:0;padding:0}ul>li,ol>li{margin-bottom:.5em}ul{list-style:square}#errorPageContainer{position:relative;min-width:13em;max-width:52em;margin:4em auto;border:1px solid ThreeDShadow;border-radius:10px;padding:3em;background-color:#ffffff;background-origin:content-box}#errorShortDesc>p{overflow:auto;border-bottom:1px solid ThreeDLightShadow;padding-bottom:1em;font-size:130%;white-space:pre-wrap}#errorLongDesc{font-size:110%}#errorTryAgain{margin-top:2em;}#brand{position:absolute;right:0;bottom:-1.5em;opacity:.4}
-		</style>
-	</head>
-	<body dir="ltr">
-		<div id="errorPageContainer">
-			<div id="errorTitle">
-				<h1 id="errorTitleText">Fehler: Netzwerk-Zeitüberschreitung oder Nicht gefunden</h1>
-			</div>
-			<div id="errorLongContent">
-				<div id="errorShortDesc">
-					<p id="errorShortDescText">Der Zentralrechner zum Aufruf der Seite braucht zu lange, um eine Antwort zu senden oder die Datei konnte nicht gefunden werden.</p>
-				</div>
-
-				<div id="errorLongDesc">
-					<ul xmlns="http://www.w3.org/1999/xhtml">
-						<li>Die Seite könnte vorübergehend nicht erreichbar sein, versuchen Sie es bitte 
-						später nochmals.</li>
-						<li>Wenn Sie auch keine andere Seite aufrufen können, überprüfen Sie bitte die 
-						Netzwerk-/Internetverbindung.</li>
-						<li>Wenn Ihr Rechner oder Netzwerk von einem Schutzschild oder einem Proxy geschützt wird, 
-						stellen Sie bitte sicher, dass Firefox auf das Internet zugreifen darf.</li>
-					</ul>
-				</div>
-			</div>
-		</div>
-	</body>
-</html>
-			"""
-			self.ui.webView.setHtml(errorPage)
-		else:
-			log.debug('Selected page could be loaded.')
-			self.numTry = 0
 	
 	@pyqtSlot(QNetworkReply, QAuthenticator)
 	def setBasicAuth(self, reply, auth):
@@ -1016,78 +893,6 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 			# on first
 			auth.setUser(self.config.get('connection', 'username'))
 			auth.setPassword(self.config.get('connection', 'password'))
-
-	@pyqtSlot()
-	def showAbout(self):
-		aboutWin = VPlanAbout(self)
-
-	@pyqtSlot()
-	def newURL(self):
-		newURLWin = VPlanURL(self)
-		if newURLWin.exec_() and newURLWin.state:
-			# rejected or not?
-			url = newURLWin.ui.url.text()
-			self.loadUrl(url)
-
-	@pyqtSlot()
-	def toggleScreen(self):
-		if self.isFullScreen():
-			self.showNormal()
-		else:
-			self.showFullScreen()
-
-	@pyqtSlot()
-	def toggleProgressBar(self):
-		try:
-			getattr(self.ui, 'progressBar') is None
-		except AttributeError:
-			self.ui.progressBar = None
-
-		if self.ui.progressBar is None:
-			self.enableProgressBar()
-		else:
-			self.disableProgressBar()
-
-	@pyqtSlot()
-	def incZoom(self):
-		zoomFact = self.ui.webView.zoomFactor()
-		steps = self.config.getfloat('browser', 'zoomSteps')
-		self.setBrowserZoom(zoomFact + steps)
-
-	@pyqtSlot()
-	def decZoom(self):
-		zoomFact = self.ui.webView.zoomFactor()
-		steps = self.config.getfloat('browser', 'zoomSteps')
-		self.setBrowserZoom(zoomFact - steps)
-
-	@pyqtSlot()
-	def resetZoom(self):
-		self.setBrowserZoom()
-
-	@pyqtSlot()
-	def startDebug(self):
-		if self.config.get('debug', 'enabled'):
-			if self.inspector is None:
-				self.inspector = QtWebKit.QWebInspector()
-				self.inspector.setPage(self.ui.webView.page())
-				self.inspector.show()
-			elif self.inspector is not None:
-				if self.inspector.close():
-					self.inspector = None
-
-	def setBrowserZoom(self, zoom = None):
-		if zoom is None:
-			zoom = self.config.getfloat('browser', 'zoomFactor')
-
-		self.ui.webView.setZoomFactor(zoom)
-
-	def loadUrl(self, url=None):
-		if url is None:
-			url = self.config.get('app', 'url')
-
-		log.info('Call %s' % (url,))
-		self.numTry = 0
-		self.ui.webView.page().mainFrame().load(QNetworkRequest(QtCore.QUrl(_fromUtf8(url))))
 
 	@pyqtSlot()
 	def showEBB(self):
@@ -1105,19 +910,19 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 			self.showFullScreen()
 		else:
 			self.show()
-		if self.config.getint('options', 'scrShotInterval'):
+
+		if self.config.getint('options', 'scrShotInterval') > 0:
 			self.scrShotTimer.start()
 
-		if not self.loaded:
-			self.loaded = True
-			self.loadUrl()
-		else:
-			self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_RESUME)
+		self.ebbJsHandler.resumeTv.emit()
+		self.ebbContentHandler.resumeTv.emit()
 
 	@pyqtSlot()
 	def hideEBB(self):
 		# stop scrshot!
 		self.scrShotTimer.stop()
+		self.ebbJsHandler.suspendTv.emit()
+		self.ebbContentHandler.suspendTv.emit()
 		self.hide()
 
 		exitCode  = subprocess.call(shlex.split('xset +dpms'))
@@ -1125,7 +930,6 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 		exitCode += subprocess.call(shlex.split('xset s expose'))
 		exitCode += subprocess.call(shlex.split('xset s on'))
 		log.info('Screensaver turned on %s' % ('successful' if exitCode == 0 else 'with errors',))
-		self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_SUSPEND)
 		# if we are connected with MDC, shutdown directly. That's the best.
 		if self.config.getboolean('mdc', 'enable'):
 			# first send "go offline event"
@@ -1153,7 +957,74 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 	@pyqtSlot(DsbMessage)
 	def dsbMessage(self, msg):
 		log.info('We got a message for the ebb: %s.' % (msg.toJson(),))
-		self.ui.webView.page().mainFrame().evaluateJavaScript(VPlanMainWindow.NOTIFY_PAGE.format(MSG=msg.toJson()))
+		# FIXME: we need to handle it by ourself!
+		if msg.action == DsbMessage.ACTION_NEWS:
+			news = msg.value
+			if msg.event == DsbMessage.EVENT_CREATE:
+				# extract image if there is an image.
+				parser = ContentImageFinder()
+				parser.feed(news['text'])
+				# did we found an image?
+				if len(parser.image) > 0:
+					imgUrl = urljoin(self.server.baseUrl, parser.image)
+				else:
+					imgUrl = ''
+				news['imgUrl'] = imgUrl
+				self.ebbJsHandler.newsAdded.emit(QVariant(news))
+			elif msg.event == DsbMessage.EVENT_CHANGE:
+				# extract image if there is an image.
+				parser = ContentImageFinder()
+				parser.feed(news['text'])
+				# did we found an image?
+				if len(parser.image) > 0:
+					imgUrl = urljoin(self.server.baseUrl, parser.image)
+				else:
+					imgUrl = ''
+				news['imgUrl'] = imgUrl
+				self.ebbJsHandler.newsUpdate.emit(QVariant(news))
+			elif msg.event == DsbMessage.EVENT_DELETE:
+				self.ebbJsHandler.newsDeleted.emit(QVariant(msg.id))
+		elif msg.action == DsbMessage.ACTION_ANNOUNCEMENT:
+			anno = msg.value
+			if msg.event == DsbMessage.EVENT_CREATE:
+				self.ebbJsHandler.announcementAdded.emit(QVariant(anno))
+			elif msg.event == DsbMessage.EVENT_CHANGE:
+				self.ebbJsHandler.announcementUpdate.emit(QVariant(anno))
+			elif msg.event == DsbMessage.EVENT_DELETE:
+				self.ebbJsHandler.announcementDelete.emit(QVariant(msg.id))
+		elif msg.action == DsbMessage.ACTION_VPLAN:
+			# request for plan again. 
+			req = QNetworkRequest(QUrl(self.server.loadPlanUrl))
+			req.setPriority(QNetworkRequest.HighPriority)
+			self.manager.get(req)
+		elif msg.action == DsbMessage.ACTION_INFOSCREEN:
+			if msg.event == DsbMessage.EVENT_DELETE:
+				# by default nothing here.
+				self.ebbContentHandler.contentDeassigned.emit()
+			else:
+				dataContent = msg.value
+				# by default nothing here.
+				self.ebbContentHandler.contentDeassigned.emit()
+				if dataContent is not None and len(dataContent['pdfUrl']) > 0:
+					# yes there is something defined.
+					# but the converting is done by another thread - so that nothing is blocked.
+					self.checkRequestContentPdf(dataContent['pdfUrl'])
+				else:
+					self.ebbContentHandler.contentDeassigned.emit()
+					if dataContent is not None \
+					 and self.ebbContentHandler.contentBody != dataContent['content']:
+						self.ebbContentHandler.contentBody = dataContent['content']
+						self.ebbContentHandler.contentBodyChanged.emit()
+		elif msg.action == DsbMessage.ACTION_MODE:
+			if msg.event == DsbMessage.EVENT_CHANGE:
+				toMode = msg.value
+				if toMode in ['content', 'default', 'firealarm']:
+					self.ebbContentHandler.modeChanged.emit(QVariant(toMode))
+					self.flsConfig.set('app', 'mode', toMode)
+					self.flsConfig.save(False)
+					self.server.changeMode(toMode)
+				else:
+					log.error('Invalid destination mode given: %s' % (toMode,))
 
 	@pyqtSlot()
 	def sendEbbState(self):
@@ -1162,25 +1033,314 @@ class VPlanMainWindow(QtWidgets.QMainWindow):
 		else:
 			self.sigSendState.emit('idle')
 
-	def autostart(self):
-		title = self.config.get('app', 'title')
-		self.setWindowTitle(QtWidgets.QApplication.translate("MainWindow", title, None))
+	@pyqtSlot()
+	def loadPlanData(self):
+		if self.server.baseUrl is None:
+			self.loaded = False
+		elif self.loaded:
+			return None
+		else:
+			self.loaded = True
 
-		self.setActions()
-		# enable progressbar ?
-		if self.config.getboolean('progress', 'enableBar'):
-			self.enableProgressBar()
+		# request for plan:
+		req = QNetworkRequest(QUrl(self.server.loadPlanUrl))
+		req.setPriority(QNetworkRequest.HighPriority)
+		self.manager.get(req)
 
-		self.setBrowserZoom()
-		#self.loadUrl()
+		# request for news:
+		newsCount = self.config.get('appearance', 'news_count')
+		req = QNetworkRequest(QUrl(self.server.loadNewsUrl + '&count=' + newsCount))
+		req.setPriority(QNetworkRequest.LowPriority)
+		self.manager.get(req)
 
-		# reload regulary?
-		if self.config.getint('browser', 'reloadEvery') > 0:
-			reloader = VPlanReloader('webView', self.config.getint('browser', 'reloadEvery'))
-			self.config.addObserver(reloader)
-			self.reloader.append(reloader)
-			self.reloader.reloader.connect(self.reloadChild)
-			self.ui.webView.loadFinished.connect(reloader.pageLoaded)
+		# request for announcement:
+		req = QNetworkRequest(QUrl(self.server.loadAnnouncementUrl))
+		req.setPriority(QNetworkRequest.NormalPriority)
+		self.manager.get(req)
+
+		# request for content:
+		req = QNetworkRequest(QUrl(self.server.loadContentUrl))
+		req.setPriority(QNetworkRequest.NormalPriority)
+		self.manager.get(req)
+
+	@pyqtSlot(QNetworkReply)
+	def dataLoadFinished(self, reply):
+		# first retrieve the ebb content type (X-eBB-Type).
+		if not reply.hasRawHeader('X-eBB-Type'.encode('utf-8')):
+			dataType = 'binary'
+		else:
+			dataType = reply.rawHeader('X-eBB-Type'.encode('utf-8')).data().decode('utf-8')
+
+		# are there any errors?
+		if reply.error():
+			# FIXME: give correct url / error.
+			url = reply.url().toString()
+			log.error('Could not download %s because of %s.' % (url, reply.errorString()))
+			return False
+
+		if dataType not in ['Plan', 'News', 'Announcement', 'Content']:
+			# must be a PDF....
+			self.finishedDownloadingPdf(reply)
+			return False
+
+		dataContent = json.loads(reply.readAll().data().decode('utf-8'))
+
+		if dataType == 'Plan':
+			self.parseNewPlanData(dataContent)
+		elif dataType == 'News':
+			for news in dataContent:
+				# extract image if there is an image.
+				parser = ContentImageFinder()
+				parser.feed(news['text'])
+				# did we found an image?
+				if len(parser.image) > 0:
+					imgUrl = urljoin(self.server.baseUrl, parser.image)
+				else:
+					imgUrl = ''
+				news['imgUrl'] = imgUrl
+				self.ebbJsHandler.newsAdded.emit(QVariant(news))
+		elif dataType == 'Announcement':
+			for anno in dataContent:# extract image if there is an image.
+				self.ebbJsHandler.announcementAdded.emit(QVariant(anno))
+		elif dataType == 'Content':
+			""" 
+			Example:
+			{
+				'pdfUrl': 'http://fls.local/files/ebbPdf/553cd6320fcddreceipt_quadre_du_net.pdf', 
+				'cid': '14', 
+				'arrow': True, 
+				'modifyTime': '26.04.15 14:14', 'creator': 'Lukas Schreiner', 
+				'pdf': 'ebbPdf/553cd6320fcddreceipt_quadre_du_net.pdf', 
+				'modifier': 'Lukas Schreiner', 
+				'createTime': '26.04.15 14:14', 
+				'title': 'PPPPL', 
+				'content': ''
+			}
+			"""
+			# by default nothing here.
+			self.ebbContentHandler.contentDeassigned.emit()
+			if dataContent is not None and len(dataContent['pdfUrl']) > 0:
+				# yes there is something defined.
+				# but the converting is done by another thread - so that nothing is blocked.
+				self.checkRequestContentPdf(dataContent['pdfUrl'])
+			else:
+				self.ebbContentHandler.contentDeassigned.emit()
+				if dataContent is not None \
+				 and self.ebbContentHandler.contentBody != dataContent['content']:
+					self.ebbContentHandler.contentBody = dataContent['content']
+					self.ebbContentHandler.contentBodyChanged.emit()
+
+	def checkRequestContentPdf(self, pdfUrl):
+		baseName = QFileInfo(pdfUrl).fileName()
+		baseDir = os.path.join('ebbPdfs/', baseName)
+
+		req = QNetworkRequest(QUrl(pdfUrl))
+		req.setPriority(QNetworkRequest.LowPriority)
+		if os.path.exists(os.path.join(baseDir, baseName)):
+			# the pdf does already exist. So get the modified information.
+			sta = os.stat(os.path.join(baseDir, baseName)).st_mtime
+			dt = datetime.datetime.fromtimestamp(sta)
+			modified = dt.strftime('%a, %d %b %Y %T GMT')
+			req.setRawHeader('If-Modified-Since', modified)
+		self.manager.get(req)
+
+	def finishedDownloadingPdf(self, reply):
+		downloadPath = reply.url().path()
+		baseName = QFileInfo(downloadPath).fileName()
+		sts = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+
+		# print the header list
+		date = reply.rawHeader('Date').data().decode('utf-8')
+		# process only if it is a PDF / PS!
+		contentType = reply.rawHeader('Content-Type').data().decode('utf-8')
+		contentType = (contentType.split(';')[0]).strip().lower()
+		if contentType not in ['application/pdf', 'application/ps']:
+			log.info('File %s not a valid presentation file.' % (baseName,))
+			return False
+
+		baseDir = os.path.join('ebbPdfs/', baseName)
+		if sts == '304':
+			self.loadContentPages(baseDir)
+			return True
+
+		if os.path.exists(baseDir):
+			# delete all in it.
+			shutil.rmtree(baseDir)
+		os.makedirs(baseDir)
+
+		# now we can save the pdf.
+		f = QFile(os.path.join(baseDir, baseName))
+		f.open(QIODevice.WriteOnly)
+		f.write(reply.readAll())
+		f.close()
+
+		# which resolution do we have?
+		xDpi = 100
+		yDpi = 100
+		screen = self.app.screens()[0]
+		xDpi = round(screen.physicalDotsPerInchX(), 0) * 3
+		yDpi = round(screen.physicalDotsPerInchY(), 0) * 3
+
+		# now we can convert.
+		doc = popplerqt5.Poppler.Document.load(os.path.join(baseDir, baseName))
+		if doc is None:
+			log.error('Could not convert the pdf document %s' % (os.path.join(baseDir, baseName),))
+		else:
+			self.ebbContentHandler.contentDeassigned.emit()
+			pageCounter = 0
+			p = 0
+			while p < len(doc):
+				pageName = 'page' + str(pageCounter) + '.jpg'
+				if os.path.exists(os.path.join(baseDir, pageName)):
+					os.unlink(os.path.join(baseDir, pageName))
+				pag1 = QtGui.QPixmap.fromImage(doc.page(pageCounter).renderToImage(xDpi, yDpi))
+				pag1.save(os.path.join(baseDir, pageName))
+
+				self.ebbContentHandler.pageAdded.emit(QVariant(os.path.abspath(os.path.join(baseDir, pageName))))
+				pageCounter += 1
+				p += 1
+
+			self.ebbContentHandler.contentAssigned.emit()
+
+	def loadContentPages(self, baseDir):
+		# retrieve all files of that folder.
+		relevantFiles = [ f for f in os.listdir(baseDir) if f.endswith('.jpg') ]
+
+		self.ebbContentHandler.contentDeassigned.emit()
+		for f in relevantFiles:
+			self.ebbContentHandler.pageAdded.emit(QVariant(os.path.abspath(os.path.join(baseDir, f))))
+
+		if len(relevantFiles) > 0:
+			self.ebbContentHandler.contentAssigned.emit()
+
+	def parseNewPlanData(self, data):
+		"""
+		The dayList contains a list of days/dicts we show. It must fit more or less the structure in qml:
+		1. day => contains the date in format dd.mm.yyyy
+		2. abbr => contains the abbreviation of the weekday
+		3. name => contains the full weekday name.
+		4. txt => human readable formatted name -- e.g. Montag, 04.05.2015
+		5. index => contains the start index in the planList.
+		6. pages => tells us, how many pages are possible.
+		"""
+		dayList = []
+		"""
+		The planList is a list which contains number of dicts with the following structure:
+		1. classn => class name
+		2. hour => hour
+		3. original => contains the original data.
+		4. change => contains the change information
+
+		The handling is different to the javascript solution. We minimize the effort, this software is there to run in
+		fullscreen on a window so we ignore resizing operations, etc. We have a couple number of entries which we
+		can show and based on this we pre-generate the pages. 
+		"""
+		planList = []
+
+		"""
+		To update the columns width accordingly, we determine here the factors later for updating.
+		"""
+		maxFieldLengths = {
+			'classn': 0,
+			'hour': 0,
+			'original': 0,
+			'change': 0
+		}
+
+		didx = 0
+		pidx = 0
+		for day in data['times']:
+			pageCounter = 0
+			newDay = {'day': '', 'abbr': '', 'name': '', 'txt': '', 'index': 0, 'pages': 0}
+			dt = datetime.datetime.fromtimestamp(day)
+			newDay['day'] = dt.strftime('%d.%m.%Y')
+			newDay['abbr'] = dt.strftime('%a')
+			newDay['name'] = dt.strftime('%A')
+			newDay['txt'] = dt.strftime('%A, %d.%m.%Y')
+			newDay['index'] = didx
+
+			entriesInPage = 0
+			for entry in data['changes'][str(day)]:
+				if len(planList) <= pidx:
+					planList.append([])
+
+				newEntry = {'classn': '', 'hour': '', 'original': '', 'change': ''}
+				newEntry['classn'] = entry['raw']['class']
+				newEntry['hour'] = entry['raw']['hour']
+				newEntry['original'] = entry['raw']['what']
+				newEntry['change'] = entry['raw']['change']
+				tmpLen = len(entry['raw']['class'])
+				if tmpLen > maxFieldLengths['classn']: 
+					maxFieldLengths['classn'] = tmpLen
+				tmpLen = len(entry['raw']['hour'])
+				if tmpLen > maxFieldLengths['hour']: 
+					maxFieldLengths['hour'] = tmpLen
+				tmpLen = len(entry['raw']['what'])
+				if tmpLen > maxFieldLengths['original']: 
+					maxFieldLengths['original'] = tmpLen
+				tmpLen = len(entry['raw']['change'])
+				if tmpLen > maxFieldLengths['change']: 
+					maxFieldLengths['change'] = tmpLen
+
+				planList[pidx].append(newEntry)
+				entriesInPage += 1
+
+				if entriesInPage >= self.ebbJsHandler.maxEntries:
+					entriesInPage = 0
+					pidx += 1
+					pageCounter += 1
+			
+			if entriesInPage > 0:
+				pageCounter += 1
+
+			newDay['pages'] = pageCounter
+			dayList.append(newDay)
+			didx += 1
+			# and we really need new page for new date!
+			pidx += 1
+
+		# calculate field factors...
+		maxFieldLengths['classn'] += 3
+		comLength = 0
+		for k, v in maxFieldLengths.items():
+			comLength += v
+
+		fieldFactor = {
+			'classn': 0,
+			'hour': 0,
+			'original': 0,
+			'change': 0
+		}
+		for k, v in maxFieldLengths.items():
+			fieldFactor[k] = round(v/comLength, 2)
+
+		self.ebbJsHandler.planColSizeChanged.emit(QVariant(fieldFactor))
+
+		# now populate the data.
+		stand = datetime.datetime.fromtimestamp(data['stand']).strftime('%d.%m. %H:%M')
+		self.ebbJsHandler.planAvailable.emit(QVariant(dayList), QVariant(planList), stand)
+
+class ContentImageFinder(HTMLParser):
+
+	def __init__(self):
+		super().__init__()
+		self.image = ''
+
+	def handle_starttag(self, tag, attrs):
+		if len(self.image) > 0:
+			pass
+			return
+
+		if tag == 'img':
+			for attr in attrs:
+				if attr[0] == 'src':
+					self.image = attr[1]
+					break
+
+def processTermSignal(signum, frame):
+	log.debug('yes, the SIGTERM signal reached me.')
+	global ds
+	ds.sysTermSignal.emit()
 
 if __name__ == "__main__":
 	hdlr = WatchedFileHandler('vclient.log')
@@ -1193,7 +1353,19 @@ if __name__ == "__main__":
 	with open('vclient.pid', 'w') as f:
 		f.write('%i' % (os.getpid(),))
 	subprocess.call(shlex.split('xset dpms 0 0 0'))
+
 	app = QtWidgets.QApplication(sys.argv)
-	ds = VPlanMainWindow()
+	qmlRegisterType(EbbJsHandler, 'EbbJsHandler', 1, 0, 'EbbJsHandler')
+	qmlRegisterType(EbbContentHandler, 'EbbContentHandler', 1, 0, 'EbbContentHandler')
+	ds = VPlanMainWindow(app)
+
+	# register TERM signal.
+	signal.signal(signal.SIGTERM, processTermSignal)
+	# this does only work, when we let the python thing running...
+	signalTimer = QTimer()
+	signalTimer.start(500)
+	signalTimer.timeout.connect(lambda: None)
+
+	# start application.
 	ds.start()
-	app.exec_()
+	sys.exit(app.exec_())
