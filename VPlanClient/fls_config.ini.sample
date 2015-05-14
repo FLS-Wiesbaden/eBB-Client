@@ -1,0 +1,24 @@
+[vplan]
+apidaylimit = 7
+app_link = ''
+days = 3
+daysteacher = 3
+hide_columns = ['']
+log = True
+logfile = '../logs/vplan.log'
+school_start = 480
+show_app_advertisement = False
+show_cancelled_classes = True
+show_full_subject_names = True
+show_full_teacher_names = True
+show_mobile_link = True
+show_school_type = True
+show_subject_shortcut = False
+show_teacher_shortcut = False
+upload_password = ''
+
+[vplan_tv]
+days = 3
+enabled = True
+leftDescription = 'Ankündigungen'
+rightDescription = 'fls-wiesbaden.de'

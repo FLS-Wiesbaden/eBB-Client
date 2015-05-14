@@ -14,9 +14,10 @@ Rectangle {
 	width: parent.width
 	height: parent.height
 
-	function setModel(model) {
+	function setBasicData(model, cycleTime) {
 		presenterPdfModel = model
 		visualModel.model = presenterPdfModel
+		slideT.interval = cycleTime
 		slideT.start()
 	}
 

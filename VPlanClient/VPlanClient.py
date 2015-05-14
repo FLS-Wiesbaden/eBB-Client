@@ -6,7 +6,7 @@ from OpenSSL import SSL
 from configparser import SafeConfigParser
 from html.parser import HTMLParser
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice, QMutex
-from PyQt5.QtCore import QMutexLocker, QTimer, QUrl, QVariant, QFile, QFileInfo
+from PyQt5.QtCore import QMutexLocker, QTimer, QUrl, QVariant, QFile, QFileInfo, QUuid
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
 from PyQt5.QtWebKitWidgets import QWebPage
 from PyQt5.QtQuick import QQuickView
@@ -44,7 +44,7 @@ log.addHandler(hdlr)
 workDir = os.path.dirname(os.path.realpath(__file__))
 # global config
 globConfig = FLSConfiguration(os.path.join(workDir,'config.ini'))
-flsConfig = FLSConfiguration()
+flsConfig = FLSConfiguration(os.path.join(workDir,'fls_config.ini'))
 ds = None
 
 try:
@@ -587,13 +587,18 @@ class DsbServer(QThread):
 		except Exception as e:
 			log.error('Could not close connection: %s' % (e,))
 
-class EbbJsHandler(QObject):
+class EbbPlanHandler(QObject):
 	siteReload = pyqtSignal()
 	flsConfigLoaded = pyqtSignal()
 	ebbConfigLoaded = pyqtSignal()
 	connected = pyqtSignal()
 	suspendTv = pyqtSignal()
 	resumeTv = pyqtSignal()
+	loadDesignPictures = pyqtSignal([QUrl, QUrl], arguments=['headerCenterUrl', 'headerRptUrl'])
+	# timer signals
+	timerChange = pyqtSignal([QVariant, QVariant, QVariant], arguments=['vplanInterval', 'newsInterval', 'annoInterval'])
+	 
+	# model signals
 	newsAdded = pyqtSignal([QVariant], arguments=['news'])
 	newsUpdate = pyqtSignal([QVariant], arguments=['news'])
 	newsDeleted = pyqtSignal([QVariant], arguments=['newsId'])
@@ -606,14 +611,32 @@ class EbbJsHandler(QObject):
 
 	def __init__(self, parent=None):
 		QObject.__init__(self, parent)
-		self.ebbConfig = None
-		self.flsConfig = None
+		# workaround to set these things from the beginning!
+		global globConfig
+		global flsConfig
+		self.ebbConfig = globConfig
+		self.flsConfig = flsConfig
 		self.ready = False
 		self.maxEntries = 0
+		self.vplanInterval = 4
+		self.newsInterval = 7
+		self.annoInterval = 4
+		self.uuidGenerator = QUuid()
 
 	def setEbbConfig(self, config):
 		self.ebbConfig = config
 		self.ebbConfigLoaded.emit()
+		if self.ebbConfig.getint('appearance', 'plan_cycle_time') != self.vplanInterval \
+		 or self.ebbConfig.getint('appearance', 'news_cycle_time') != self.newsInterval \
+		 or self.ebbConfig.getint('appearance', 'announcement_cycle_time') != self.annoInterval:
+		 	self.vplanInterval = self.ebbConfig.getint('appearance', 'plan_cycle_time')
+		 	self.newsInterval = self.ebbConfig.getint('appearance', 'news_cycle_time')
+		 	self.annoInterval = self.ebbConfig.getint('appearance', 'announcement_cycle_time')
+		 	self.timerChange.emit(
+		 		QVariant(self.vplanInterval*1000), 
+		 		QVariant(self.newsInterval*1000), 
+		 		QVariant(self.annoInterval*1000)
+	 		)
 
 	def setFlsConfig(self, config):
 		self.flsConfig = config
@@ -659,6 +682,16 @@ class EbbJsHandler(QObject):
 		else: 
 			return True
 
+	def _generateUuid(self):
+		return str(self.uuidGenerator.createUuid().toString())
+
+	def _leftColumnTitle(self):
+		return self.flsConfig.get('vplan_tv', 'leftDescription')
+
+
+	def _rightColumnTitle(self):
+		return self.flsConfig.get('vplan_tv', 'rightDescription')
+
 	@pyqtSlot()
 	def onConnected(self):
 		self.connected.emit()
@@ -667,6 +700,9 @@ class EbbJsHandler(QObject):
 	flscfg = pyqtProperty(str, fget=_flsConfig)
 	machineId = pyqtProperty(str, fget=_machineId)
 	showFutureDays = pyqtProperty(bool, fget=_showFutureDays)
+	generateUuid = pyqtProperty(str, fget=_generateUuid)
+	leftTitle = pyqtProperty(str, fget=_leftColumnTitle)
+	rightTitle = pyqtProperty(str, fget=_rightColumnTitle)
 
 class EbbContentHandler(QObject):
 	modeChanged = pyqtSignal(QVariant, arguments=['toMode'])
@@ -687,8 +723,11 @@ class EbbContentHandler(QObject):
 
 	def __init__(self, parent=None):
 		QObject.__init__(self, parent)
-		self.ebbConfig = None
-		self.flsConfig = None
+		# workaround to set these things from the beginning!
+		global globConfig
+		global flsConfig
+		self.ebbConfig = globConfig
+		self.flsConfig = flsConfig
 		self.prevContentArrow = 0
 		self.prevFireArrow = 0
 		self.currentMode = 'default'
@@ -729,12 +768,16 @@ class EbbContentHandler(QObject):
 	def _fireArrow(self):
 		return self.ebbConfig.getfloat('appearance', 'escape_route_direction')
 
+	def _cycleTime(self):
+		return self.ebbConfig.getint('appearance', 'content_cycle_time')*1000
+
 	config = pyqtProperty(str, fget=_config)
 	flscfg = pyqtProperty(str, fget=_flsConfig)
 	machineId = pyqtProperty(str, fget=_machineId)
 	contentArrow = pyqtProperty(float, fget=_contentArrow)
 	contentText = pyqtProperty(QVariant, fget=_contentBody)
 	fireArrow = pyqtProperty(float, fget=_fireArrow)
+	cycleTime = pyqtProperty(float, fget=_cycleTime)
 
 	@pyqtSlot()
 	def onConnected(self):
@@ -756,8 +799,11 @@ class VPlanMainWindow(QQuickView):
 		self.flsConfig = flsConfig
 		self.flsConfig.addObserver(self)
 		self.server = None
-		self.timer = None
-		self.inspector = None
+		self.quitTimer = None
+		self.dayChangeTimer = QTimer()
+		self.dayChangeTimer.setSingleShot(True)
+		self.elapsedHourTimer = QTimer()
+		self.elapsedHourTimer.setSingleShot(True)
 		self.loaded = False
 		self.app = app
 
@@ -773,9 +819,9 @@ class VPlanMainWindow(QQuickView):
 
 		rootContext = self.rootContext()
 		rootObject = self.rootObject()
-		self.ebbJsHandler = rootObject.findChild(EbbJsHandler, 'ebbJsHandler')
-		self.ebbJsHandler.setEbbConfig(self.config)
-		self.ebbJsHandler.setFlsConfig(self.flsConfig)
+		self.ebbPlanHandler = rootObject.findChild(EbbPlanHandler, 'ebbPlanHandler')
+		self.ebbPlanHandler.setEbbConfig(self.config)
+		self.ebbPlanHandler.setFlsConfig(self.flsConfig)
 		self.ebbContentHandler = rootObject.findChild(EbbContentHandler, 'ebbContentHandler')
 		self.ebbContentHandler.setEbbConfig(self.config)
 		self.ebbContentHandler.setFlsConfig(self.flsConfig)
@@ -787,6 +833,8 @@ class VPlanMainWindow(QQuickView):
 		self.enableProxy()
 		
 		self.setActions()
+		self.calculateNextDayTimer()
+		self.calculateNextHourTimer()
 
 	def start(self):
 		self.server = DsbServer(self)
@@ -801,7 +849,7 @@ class VPlanMainWindow(QQuickView):
 		self.sigSendState.connect(self.server.sendState)
 		self.sigSndScrShot.connect(self.server.sendScreenshot)
 		self.ebbContentHandler.modeChanged.connect(self.server.changeMode)
-		self.server.connected.connect(self.ebbJsHandler.onConnected)
+		self.server.connected.connect(self.ebbPlanHandler.onConnected)
 		self.server.connected.connect(self.ebbContentHandler.onConnected)
 
 		self.server.start()
@@ -825,11 +873,11 @@ class VPlanMainWindow(QQuickView):
 		log.info('Quitting eBB. Wait 5 sec. for communication with pyTools.')
 		self.hide()
 		# wait 5 sec!
-		self.timer = QTimer()
-		self.timer.setInterval(5000)
-		self.timer.setSingleShot(True)
-		self.timer.timeout.connect(self.quitHard)
-		self.timer.start()
+		self.quitTimer = QTimer()
+		self.quitTimer.setInterval(5000)
+		self.quitTimer.setSingleShot(True)
+		self.quitTimer.timeout.connect(self.quitHard)
+		self.quitTimer.start()
 
 	def quitHard(self):
 		log.info('Quit hard now!')
@@ -847,12 +895,37 @@ class VPlanMainWindow(QQuickView):
 			if self.config.getint('options', 'scrShotInterval') > 0:
 				self.scrShotTimer.start()
 			del timerActive
+			if self.config.getboolean('appearance', 'filter_elapsed_hour'):
+				self.elapsedHourTimer.stop()
+				self.calculateNextHourTimer()
 
 			# inform the two js handlers.
-			self.ebbJsHandler.setFlsConfig(self.flsConfig)
-			self.ebbJsHandler.setEbbConfig(self.config)
+			self.ebbPlanHandler.setFlsConfig(self.flsConfig)
+			self.ebbPlanHandler.setEbbConfig(self.config)
 			self.ebbContentHandler.setFlsConfig(self.flsConfig)
 			self.ebbContentHandler.setEbbConfig(self.config)
+
+	@pyqtSlot()
+	def dayChangeTimerHook(self):
+		log.info('Day changed...')
+
+		# request for plan:
+		req = QNetworkRequest(QUrl(self.server.loadPlanUrl))
+		req.setPriority(QNetworkRequest.HighPriority)
+		self.manager.get(req)
+
+		self.calculateNextDayTimer()
+
+	@pyqtSlot()
+	def elapsedHourTimerHook(self):
+		log.info('Hour changed -- reload plan...')
+
+		# request for plan:
+		req = QNetworkRequest(QUrl(self.server.loadPlanUrl))
+		req.setPriority(QNetworkRequest.HighPriority)
+		self.manager.get(req)
+
+		self.calculateNextHourTimer()
 
 	def enableCache(self):
 		self.diskCache = QNetworkDiskCache()
@@ -880,6 +953,10 @@ class VPlanMainWindow(QQuickView):
 		self.sysTermSignal.connect(self.handleTermSignal)
 		# if page requires username / password
 		self.manager.authenticationRequired.connect(self.setBasicAuth)
+		# day change timer
+		self.dayChangeTimer.timeout.connect(self.dayChangeTimerHook)
+		# remove elapsed hour hook...
+		self.elapsedHourTimer.timeout.connect(self.elapsedHourTimerHook)
 	
 	@pyqtSlot(QNetworkReply, QAuthenticator)
 	def setBasicAuth(self, reply, auth):
@@ -893,6 +970,27 @@ class VPlanMainWindow(QQuickView):
 			# on first
 			auth.setUser(self.config.get('connection', 'username'))
 			auth.setPassword(self.config.get('connection', 'password'))
+
+	def calculateNextDayTimer(self):
+		now = datetime.datetime.now()
+		# in the night, 1-5 minutes are no problems.
+		destination = (now + datetime.timedelta(days=1)).replace(hour=0, minute=3, second=0)
+		self.dayChangeTimer.setInterval(round((destination-now).total_seconds()*1000))
+		# and now start...
+		self.dayChangeTimer.start()
+		log.info('Next event of nextDayTimer: %s milliseconds' % (str(self.dayChangeTimer.interval()),))
+
+	def calculateNextHourTimer(self):
+		if not self.config.getboolean('appearance', 'filter_elapsed_hour'):
+			return
+
+		now = datetime.datetime.now()
+		# in the night, 1-5 minutes are no problems.
+		destination = (now + datetime.timedelta(hours=1)).replace(minute=self.config.getint('appearance', 'filter_elapsed_hour_buffer'), second=5)
+		self.elapsedHourTimer.setInterval(round((destination-now).total_seconds()*1000))
+		# and now start...
+		self.elapsedHourTimer.start()
+		log.info('Next event of nextHourTimer: %s milliseconds' % (str(self.elapsedHourTimer.interval()),))
 
 	@pyqtSlot()
 	def showEBB(self):
@@ -914,14 +1012,14 @@ class VPlanMainWindow(QQuickView):
 		if self.config.getint('options', 'scrShotInterval') > 0:
 			self.scrShotTimer.start()
 
-		self.ebbJsHandler.resumeTv.emit()
+		self.ebbPlanHandler.resumeTv.emit()
 		self.ebbContentHandler.resumeTv.emit()
 
 	@pyqtSlot()
 	def hideEBB(self):
 		# stop scrshot!
 		self.scrShotTimer.stop()
-		self.ebbJsHandler.suspendTv.emit()
+		self.ebbPlanHandler.suspendTv.emit()
 		self.ebbContentHandler.suspendTv.emit()
 		self.hide()
 
@@ -942,15 +1040,12 @@ class VPlanMainWindow(QQuickView):
 	def createScreenshot(self):
 		if self.server.runState and self.isVisible():
 			log.debug('Create screenshot')
-			win = QtGui.QGuiApplication.topLevelWindows()
-			if len(win) > 0:
-				win = win[0]
-				screen = QtGui.QGuiApplication.primaryScreen()
-				if screen:
-					scrShot = screen.grabWindow(win.winId())
-					if self.config.getint('options', 'scrShotSize') > 0:
-						scrShot = scrShot.scaledToWidth(self.config.getint('options', 'scrShotSize'))
-					self.sigSndScrShot.emit(scrShot)
+			screen = self.screen()
+			if screen:
+				scrShot = screen.grabWindow(self.winId())
+				if self.config.getint('options', 'scrShotSize') > 0:
+					scrShot = scrShot.scaledToWidth(self.config.getint('options', 'scrShotSize'))
+				self.sigSndScrShot.emit(scrShot)
 		else:
 			log.debug('Screenshot canceled (runState: %s ; Visible: %s).' % (self.server.runState, self.isVisible()))
 
@@ -970,7 +1065,7 @@ class VPlanMainWindow(QQuickView):
 				else:
 					imgUrl = ''
 				news['imgUrl'] = imgUrl
-				self.ebbJsHandler.newsAdded.emit(QVariant(news))
+				self.ebbPlanHandler.newsAdded.emit(QVariant(news))
 			elif msg.event == DsbMessage.EVENT_CHANGE:
 				# extract image if there is an image.
 				parser = ContentImageFinder()
@@ -981,17 +1076,17 @@ class VPlanMainWindow(QQuickView):
 				else:
 					imgUrl = ''
 				news['imgUrl'] = imgUrl
-				self.ebbJsHandler.newsUpdate.emit(QVariant(news))
+				self.ebbPlanHandler.newsUpdate.emit(QVariant(news))
 			elif msg.event == DsbMessage.EVENT_DELETE:
-				self.ebbJsHandler.newsDeleted.emit(QVariant(msg.id))
+				self.ebbPlanHandler.newsDeleted.emit(QVariant(msg.id))
 		elif msg.action == DsbMessage.ACTION_ANNOUNCEMENT:
 			anno = msg.value
 			if msg.event == DsbMessage.EVENT_CREATE:
-				self.ebbJsHandler.announcementAdded.emit(QVariant(anno))
+				self.ebbPlanHandler.announcementAdded.emit(QVariant(anno))
 			elif msg.event == DsbMessage.EVENT_CHANGE:
-				self.ebbJsHandler.announcementUpdate.emit(QVariant(anno))
+				self.ebbPlanHandler.announcementUpdate.emit(QVariant(anno))
 			elif msg.event == DsbMessage.EVENT_DELETE:
-				self.ebbJsHandler.announcementDelete.emit(QVariant(msg.id))
+				self.ebbPlanHandler.announcementDelete.emit(QVariant(msg.id))
 		elif msg.action == DsbMessage.ACTION_VPLAN:
 			# request for plan again. 
 			req = QNetworkRequest(QUrl(self.server.loadPlanUrl))
@@ -1005,14 +1100,16 @@ class VPlanMainWindow(QQuickView):
 				dataContent = msg.value
 				# by default nothing here.
 				self.ebbContentHandler.contentDeassigned.emit()
-				if dataContent is not None and len(dataContent['pdfUrl']) > 0:
+				if dataContent is not None and type(dataContent).__name__ == 'dict' \
+					and len(dataContent['pdfUrl']) > 0:
 					# yes there is something defined.
 					# but the converting is done by another thread - so that nothing is blocked.
 					self.checkRequestContentPdf(dataContent['pdfUrl'])
 				else:
 					self.ebbContentHandler.contentDeassigned.emit()
 					if dataContent is not None \
-					 and self.ebbContentHandler.contentBody != dataContent['content']:
+						and type(dataContent).__name__ == 'dict' \
+						and self.ebbContentHandler.contentBody != dataContent['content']:
 						self.ebbContentHandler.contentBody = dataContent['content']
 						self.ebbContentHandler.contentBodyChanged.emit()
 		elif msg.action == DsbMessage.ACTION_MODE:
@@ -1063,6 +1160,11 @@ class VPlanMainWindow(QQuickView):
 		req.setPriority(QNetworkRequest.NormalPriority)
 		self.manager.get(req)
 
+		# so... we need some graphics data for the design!
+		headerCenterUrl = self.server.baseUrl + 'res/ebb/header_center.png'
+		headerRptUrl = self.server.baseUrl + 'res/ebb/header_wdh.png'
+		self.ebbPlanHandler.loadDesignPictures.emit(QUrl(headerCenterUrl), QUrl(headerRptUrl))
+
 	@pyqtSlot(QNetworkReply)
 	def dataLoadFinished(self, reply):
 		# first retrieve the ebb content type (X-eBB-Type).
@@ -1083,11 +1185,15 @@ class VPlanMainWindow(QQuickView):
 			self.finishedDownloadingPdf(reply)
 			return False
 
-		dataContent = json.loads(reply.readAll().data().decode('utf-8'))
+		try:
+			dataContent = json.loads(reply.readAll().data().decode('utf-8'))
+		except ValueError:
+			# no valid data returned.
+			dataContent = None
 
-		if dataType == 'Plan':
+		if dataType == 'Plan' and dataContent is not None:
 			self.parseNewPlanData(dataContent)
-		elif dataType == 'News':
+		elif dataType == 'News' and dataContent is not None:
 			for news in dataContent:
 				# extract image if there is an image.
 				parser = ContentImageFinder()
@@ -1098,10 +1204,10 @@ class VPlanMainWindow(QQuickView):
 				else:
 					imgUrl = ''
 				news['imgUrl'] = imgUrl
-				self.ebbJsHandler.newsAdded.emit(QVariant(news))
-		elif dataType == 'Announcement':
-			for anno in dataContent:# extract image if there is an image.
-				self.ebbJsHandler.announcementAdded.emit(QVariant(anno))
+				self.ebbPlanHandler.newsAdded.emit(QVariant(news))
+		elif dataType == 'Announcement' and dataContent is not None:
+			for anno in dataContent:
+				self.ebbPlanHandler.announcementAdded.emit(QVariant(anno))
 		elif dataType == 'Content':
 			""" 
 			Example:
@@ -1119,14 +1225,15 @@ class VPlanMainWindow(QQuickView):
 			"""
 			# by default nothing here.
 			self.ebbContentHandler.contentDeassigned.emit()
+			if type(dataContent).__name__ != 'dict':
+				dataContent = None
 			if dataContent is not None and len(dataContent['pdfUrl']) > 0:
 				# yes there is something defined.
 				# but the converting is done by another thread - so that nothing is blocked.
 				self.checkRequestContentPdf(dataContent['pdfUrl'])
 			else:
 				self.ebbContentHandler.contentDeassigned.emit()
-				if dataContent is not None \
-				 and self.ebbContentHandler.contentBody != dataContent['content']:
+				if dataContent is not None and self.ebbContentHandler.contentBody != dataContent['content']:
 					self.ebbContentHandler.contentBody = dataContent['content']
 					self.ebbContentHandler.contentBodyChanged.emit()
 
@@ -1177,7 +1284,7 @@ class VPlanMainWindow(QQuickView):
 		# which resolution do we have?
 		xDpi = 100
 		yDpi = 100
-		screen = self.app.screens()[0]
+		screen = self.screen()
 		xDpi = round(screen.physicalDotsPerInchX(), 0) * 3
 		yDpi = round(screen.physicalDotsPerInchY(), 0) * 3
 
@@ -1285,7 +1392,7 @@ class VPlanMainWindow(QQuickView):
 				planList[pidx].append(newEntry)
 				entriesInPage += 1
 
-				if entriesInPage >= self.ebbJsHandler.maxEntries:
+				if entriesInPage >= self.ebbPlanHandler.maxEntries:
 					entriesInPage = 0
 					pidx += 1
 					pageCounter += 1
@@ -1314,11 +1421,11 @@ class VPlanMainWindow(QQuickView):
 		for k, v in maxFieldLengths.items():
 			fieldFactor[k] = round(v/comLength, 2)
 
-		self.ebbJsHandler.planColSizeChanged.emit(QVariant(fieldFactor))
+		self.ebbPlanHandler.planColSizeChanged.emit(QVariant(fieldFactor))
 
 		# now populate the data.
 		stand = datetime.datetime.fromtimestamp(data['stand']).strftime('%d.%m. %H:%M')
-		self.ebbJsHandler.planAvailable.emit(QVariant(dayList), QVariant(planList), stand)
+		self.ebbPlanHandler.planAvailable.emit(QVariant(dayList), QVariant(planList), stand)
 
 class ContentImageFinder(HTMLParser):
 
@@ -1355,7 +1462,7 @@ if __name__ == "__main__":
 	subprocess.call(shlex.split('xset dpms 0 0 0'))
 
 	app = QtWidgets.QApplication(sys.argv)
-	qmlRegisterType(EbbJsHandler, 'EbbJsHandler', 1, 0, 'EbbJsHandler')
+	qmlRegisterType(EbbPlanHandler, 'EbbPlanHandler', 1, 0, 'EbbPlanHandler')
 	qmlRegisterType(EbbContentHandler, 'EbbContentHandler', 1, 0, 'EbbContentHandler')
 	ds = VPlanMainWindow(app)
 

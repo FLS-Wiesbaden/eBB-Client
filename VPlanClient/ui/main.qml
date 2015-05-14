@@ -8,7 +8,7 @@ import "pages"
 StackView {
 	id: stackView
 	property bool browser: true
-	property BrowserPage pWeb: null
+	property VplanPage pWeb: null
 	property PresenterPage pPdf: null
 	property ContentPage pContent: null
 	property FirealarmPage pFirealarm: null
@@ -52,7 +52,7 @@ StackView {
 				if (presenterPdfModel.count > 0) {
 					currentMode = 'presenter'
 					pPdf = stackView.push(Qt.resolvedUrl("pages/PresenterPage.qml"))
-					pPdf.setModel(presenterPdfModel)
+					pPdf.setBasicData(presenterPdfModel, ebbContentHandler.cycleTime)
 					pPdf.setLoop(true)
 				} else {
 					pContent = stackView.push(Qt.resolvedUrl('pages/ContentPage.qml'))
@@ -95,7 +95,7 @@ StackView {
 	}
 
 	Component.onCompleted: {
-		pWeb = stackView.push(Qt.resolvedUrl("pages/BrowserPage.qml"))
+		pWeb = stackView.push(Qt.resolvedUrl("pages/VplanPage.qml"))
 		pWeb.onHookPresenter.connect(startPresenter)
 		stackView.continuePlan.connect(pWeb.continuePlan)
 		stackView.stopPlan.connect(pWeb.suspendPlan)
@@ -106,7 +106,7 @@ StackView {
 		if (stackView.contentReady) {
 			pPdf = stackView.push(Qt.resolvedUrl("pages/PresenterPage.qml"))
 			pPdf.onFinished.connect(presenterFinished)
-			pPdf.setModel(presenterPdfModel)
+			pPdf.setBasicData(presenterPdfModel, ebbContentHandler.cycleTime)
 		} else {
 			if (currentMode == 'default') {
 				stackView.continuePlan()

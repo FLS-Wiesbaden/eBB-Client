@@ -3,13 +3,13 @@ buildDir   = build
 debugFlg   = 
 PACKAGE = VPlanClient
 #Directory with ui and resource files
-UI_FILES = about.ui browser.ui url.ui
+UI_FILES = main.qml pages/PresenterPage.qml
 RESOURCES = logos.qrc
 PYTHONS = $(wildcard $(PACKAGE)/*.py)
 RESOURCE_DIR = $(PACKAGE)/res
 UI_DIR = $(PACKAGE)/ui
 
-COMPILED_UI = $(UI_FILES:%.ui=$(buildDir)/$(PACKAGE)/ui_%.py)
+COMPILED_UI = $(UI_FILES:%.qml=$(buildDir)/$(UI_DIR)/%.qml)
 COMPILED_RESOURCES = $(RESOURCES:%.qrc=$(buildDir)/$(PACKAGE)/%_rc.py)
 COMPILED_PYTHONS = $(PYTHONS:%.py=$(buildDir)/%.py)
 
@@ -38,12 +38,11 @@ $(buildDir)/%.py: %.py
 	cp $< $@
 	chmod +x $@
 
-resources: $(COMPILED_RESOURCES)  
 ui: $(COMPILED_UI)
-
-$(buildDir)/$(PACKAGE)/ui_%.py: $(UI_DIR)/%.ui
-	$(PYUIC) $(debugFlg) $< -o $@
+$(buildDir)/$(UI_DIR)/%.qml: %.qml
+	echo cp $< $@
  
+resources: $(COMPILED_RESOURCES)  
 $(buildDir)/$(PACKAGE)/%_rc.py: $(RESOURCE_DIR)/%.qrc
 	$(PYRCC) $< -o $@
 

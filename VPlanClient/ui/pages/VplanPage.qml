@@ -2,7 +2,7 @@ import QtQuick 2.4
 import QtGraphicalEffects 1.0
 import QtQuick.Controls 1.3
 import QtQuick.Window 2.2
-import EbbJsHandler 1.0
+import EbbPlanHandler 1.0
 
 Column {
 	id: ebbContainer
@@ -27,17 +27,15 @@ Column {
 	property var aPlanList: []
 	property bool presenterPageAvailable: false
 
-	// Some plan settings.
-
 	// Plan sizes...
 	property double colClass: 0
 	property double colHour: 0
 	property double colOriginal: 0
 	property double colChange: 0
 
-	EbbJsHandler {
-		id: ebbJsHandler
-		objectName: "ebbJsHandler"
+	EbbPlanHandler {
+		id: ebbPlanHandler
+		objectName: "ebbPlanHandler"
 
 		onConnected: {
 			console.log('I\'m connected now!')
@@ -45,13 +43,27 @@ Column {
 		}
 		onSuspendTv: {
 			console.log('Stopped change timer in SuspendTv')
-			changePageTimer.stop()
+			ebbContainer.suspendPlan()
 		}
 		onResumeTv: {
 			aDayIdx = -1
 			aPageIdx = -1
 			console.log('Started vplan animation.')
-			changePageTimer.start()
+			ebbContainer.continuePlan()
+		}
+		onLoadDesignPictures: {
+			ebbHeadImgMiddle.source = headerCenterUrl
+			ebbHeadImgLeft.source = headerRptUrl
+			ebbHeadImgRight.source = headerRptUrl
+		}
+		onTimerChange: {
+			vplanTimer.interval = vplanInterval
+			newsTimer.interval = newsInterval
+			annoTimer.interval = annoInterval
+		}
+		onEbbConfigLoaded: {
+			lblRightColumn.text = ebbPlanHandler.rightTitle
+			lblLeftColumn.text = ebbPlanHandler.leftTitle
 		}
 		// Data handlers:
 		onNewsAdded: {
@@ -161,7 +173,12 @@ Column {
 			aPlanList = newPlanList
 			txtStand.text = qsTr('Stand: ') + newStand + ' h'
 			reloadListModels()
-			nextPage()
+			// restart timer - just to be sure, that he not immediately change
+			// the page!
+			if (vplanTimer.running) {
+				vplanTimer.stop()
+				vplanTimer.start()
+			}
 		}
 		onPlanColSizeChanged: {
 			colClass = planSizes.classn
@@ -172,12 +189,30 @@ Column {
 	}
 
 	Timer {
-		id: changePageTimer
-		interval: 5000
+		id: vplanTimer
+		interval: 4000
 		repeat: true
 		running: false
 		triggeredOnStart: true
 		onTriggered: ebbContainer.nextPage()
+	}
+
+	Timer {
+		id: newsTimer
+		interval: 7000
+		repeat: true
+		running: false
+		triggeredOnStart: true
+		onTriggered: ebbContainer.nextNews()
+	}
+
+	Timer {
+		id: annoTimer
+		interval: 4000
+		repeat: true
+		running: false
+		triggeredOnStart: true
+		onTriggered: ebbContainer.nextAnnouncement()
 	}
 
 	Item {
@@ -222,7 +257,7 @@ Column {
 					z: 5
 					anchors.verticalCenter: parent.verticalCenter
 					anchors.left: parent.left
-					text: qsTr("Ankündigungen")
+					text: ''
 					opacity: 0.85
 					textFormat: Text.PlainText
 					verticalAlignment: Text.AlignVCenter
@@ -237,7 +272,7 @@ Column {
 					z: 5
 					anchors.verticalCenter: parent.verticalCenter
 					anchors.right: parent.right
-					text: qsTr("fls-wiesbaden.de")
+					text: ''
 					anchors.rightMargin: 0
 					anchors.verticalCenterOffset: 0
 					opacity: 0.85
@@ -286,6 +321,7 @@ Column {
 					height: parent.height
 					width: parent.width
 					property int idx: -1
+					property string uuid: ''
 					color: "#00000000"
 					border.color: "#00000000"
 
@@ -325,7 +361,7 @@ Column {
 						}
 					}
 
-					Behavior on idx {
+					Behavior on uuid {
 						ParallelAnimation {
 							NumberAnimation {
 								target: annoContainer2
@@ -351,6 +387,7 @@ Column {
 					x: parent.x + parent.width
 					y: parent.y
 					property int idx: -1
+					property string uuid: ''
 					color: "#00000000"
 					border.color: "#00000000"
 
@@ -390,7 +427,7 @@ Column {
 						}
 					}
 
-					Behavior on idx {
+					Behavior on uuid {
 						ParallelAnimation {
 							NumberAnimation {
 								target: annoContainer1
@@ -481,6 +518,7 @@ Column {
 					height: parent.height
 					width: parent.width
 					property int idx: -1
+					property string uuid: ''
 					color: "#00000000"
 					border.color: "#00000000"
 
@@ -520,7 +558,7 @@ Column {
 						}
 					}
 
-					Behavior on idx {
+					Behavior on uuid {
 						ParallelAnimation {
 							NumberAnimation {
 								target: newsContainer2
@@ -546,6 +584,7 @@ Column {
 					x: parent.x + parent.width
 					y: parent.y
 					property int idx: -1
+					property string uuid: ''
 					color: "#00000000"
 					border.color: "#00000000"
 
@@ -585,7 +624,7 @@ Column {
 						}
 					}
 
-					Behavior on idx {
+					Behavior on uuid {
 						ParallelAnimation {
 							NumberAnimation {
 								target: newsContainer1
@@ -870,7 +909,7 @@ Column {
 		Item {
 			id: vplanItemContainer
 			height: gridVplan.cellHeight
-			width: gridVplan.cellWidth
+			width: (index % 2) ? gridVplan.cellWidth + 2 : gridVplan.cellWidth
 			Rectangle {
 				color: {
 					if (index % 4) {
@@ -1057,7 +1096,7 @@ Column {
 		aPageIdx = -1
 		dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
 		reloadListModels()
-		ebbJsHandler.setMaxEntries(Math.round((vplanContentContainer.height / gridVplan.cellHeight)*2))
+		ebbPlanHandler.setMaxEntries(Math.round((vplanContentContainer.height / gridVplan.cellHeight)*2))
 	}
 
 	function reloadListModels() {
@@ -1086,6 +1125,7 @@ Column {
 			newsTopic1.text = newsObj.topic
 			newsIcon1.source = newsObj.img
 			newsContainer1.idx = aNewsIdx
+			newsContainer1.uuid = ebbPlanHandler.generateUuid
 			aFirstNews = false
 		} else {
 			// We prepare the second rectangle.
@@ -1093,6 +1133,7 @@ Column {
 			newsTopic2.text = newsObj.topic
 			newsIcon2.source = newsObj.img
 			newsContainer2.idx = aNewsIdx
+			newsContainer2.uuid = ebbPlanHandler.generateUuid
 			aFirstNews = true
 		}
 	}
@@ -1106,6 +1147,7 @@ Column {
 			annoIcon1.source = '../../res/img/alert.png'
 			annoTopic1.text = ''
 			annoContainer1.idx = -1
+			annoContainer1.uuid = ''
 			aFirstAnno = false
 			return false;
 		}
@@ -1122,6 +1164,7 @@ Column {
 			annoIcon1.source = annoObj.img
 			annoTopic1.text = annoObj.section
 			annoContainer1.idx = aAnnoIdx
+			annoContainer1.uuid = ebbPlanHandler.generateUuid
 			aFirstAnno = false
 		} else {
 			// We prepare the second rectangle.
@@ -1129,15 +1172,12 @@ Column {
 			annoIcon2.source = annoObj.img
 			annoTopic2.text = annoObj.section
 			annoContainer2.idx = aAnnoIdx
+			annoContainer2.uuid = ebbPlanHandler.generateUuid
 			aFirstAnno = true
 		}
 	}
 
 	function nextPage() {
-		// And also next news please!
-		nextNews()
-		nextAnnouncement()
-
 		// first increase page counter!
 		if (aDayIdx < 0) {
 			aDayIdx = 0
@@ -1146,9 +1186,17 @@ Column {
 		} else {
 			aPageIdx += 1
 			if (aPageIdx >= aDayList[aDayIdx]['pages']) {
-				if (ebbJsHandler.showFutureDays) {
+				if (ebbPlanHandler.showFutureDays) {
 					aDayIdx += 1
 				} else {
+					// If there is any presenter page available => show it.
+					if (ebbContainer.presenterPageAvailable) {
+						aPageIdx = -1
+						ebbContainer.suspendPlan()
+						ebbContainer.hookPresenter()
+						return
+					}
+
 					aPageIdx = 0
 					// If there is only one page, we don't have to continue here.
 					if (aDayList[aDayIdx]['pages'] == 1) {
@@ -1170,9 +1218,13 @@ Column {
 			// stop the timer and wait for next...
 			// But only, if there is some kind of presenter available.
 			if (ebbContainer.presenterPageAvailable) {
-				changePageTimer.stop()
+				ebbContainer.suspendPlan()
 				ebbContainer.hookPresenter()
 				return
+			} else {
+				aDayIdx = 0
+				aPageIdx = 0
+				aCurIdx = 0
 			}
 		}
 		if (aPlanList.length <= 0) {
@@ -1230,11 +1282,15 @@ Column {
 	}
 
 	function continuePlan() {
-		changePageTimer.start()
+		vplanTimer.start()
+		newsTimer.start()
+		annoTimer.start()
 	}
 
 	function suspendPlan() {
-		changePageTimer.stop()
+		vplanTimer.stop()
+		newsTimer.stop()
+		annoTimer.stop()
 	}
 
 	function changePresenterAvailable(pageAvailable) {

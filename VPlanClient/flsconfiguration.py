@@ -35,7 +35,7 @@ class FLSConfiguration(SafeConfigParser, ObservableSubject):
 
 				for kVal, vVal in vSec.items():
 					try:
-						newConf.set(kSec, kVal, str(vVal['value']))
+						newConf.set(kSec, kVal, str(vVal['value']).replace('%', '%%'))
 					except NoSectionError as e:
 						pass
 		except Exception as e:
