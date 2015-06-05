@@ -152,17 +152,21 @@ Column {
 			var foundIdx = -1
 			var idx = 0
 			var annoTmp = null
+			console.log('Must delete ' + annoId)
 			while (idx < annoListModel.count && foundIdx < 0) {
 				annoTmp = annoListModel.get(idx)
 				if (annoTmp.aid == annoId) {
 					foundIdx = idx
+					break
 				}
 				idx += 1
 			}
 
 			if (foundIdx >= 0) {
 				annoListModel.remove(foundIdx)
+				console.log('Removed announcement index ' + foundIdx + ' with id ' + annoId)
 				if (foundIdx == aAnnoIdx) {
+					console.log('And it was the current index -> next announcement!')
 					nextAnnouncement()
 				}
 			}
@@ -368,14 +372,14 @@ Column {
 								properties: "x"
 								from: annoContent.x
 								to: (annoContent.x - annoContent.width)
-								duration: 500
+								duration: 1500
 							}
 							NumberAnimation {
 								target: annoContainer1
 								properties: "x"
 								from: (annoContent.x + annoContent.width)
 								to: annoContent.x
-								duration: 500
+								duration: 1500
 							}
 						}
 					}
@@ -434,14 +438,14 @@ Column {
 								properties: "x"
 								from: annoContent.x
 								to: (annoContent.x - annoContent.width)
-								duration: 500
+								duration: 1500
 							}
 							NumberAnimation {
 								target: annoContainer2
 								properties: "x"
 								from: (annoContent.x + annoContent.width)
 								to: annoContent.x
-								duration: 500
+								duration: 1500
 							}
 						}
 					}
@@ -1109,6 +1113,16 @@ Column {
 	function nextNews() {
 		// Only if there are any news!
 		if (newsListModel.count <= 0) {
+			newsText1.text = ''
+			newsTopic1.text = ''
+			newsIcon1.source = ''
+			newsContainer1.idx = -1
+			newsContainer1.uuid = ''
+			newsText2.text = ''
+			newsTopic2.text = ''
+			newsIcon2.source = ''
+			newsContainer2.idx = -1
+			newsContainer2.uuid = ''
 			aNewsIdx = -1
 			return false;
 		}
@@ -1148,8 +1162,18 @@ Column {
 			annoTopic1.text = ''
 			annoContainer1.idx = -1
 			annoContainer1.uuid = ''
+			annoText2.text = qsTr('Willkommen in der Schule!')
+			annoIcon2.source = '../../res/img/alert.png'
+			annoTopic2.text = ''
+			annoContainer2.idx = -1
+			annoContainer2.uuid = ''
 			aFirstAnno = false
 			return false;
+		}
+
+		if ((aAnnoIdx + 1) == annoListModel.count && annoListModel.count <= 1) {
+			// Do not do anything.
+			return true;
 		}
 
 		aAnnoIdx += 1

@@ -814,7 +814,7 @@ class VPlanMainWindow(QQuickView):
 		self.scrShotTimer.timeout.connect(self.createScreenshot)
 
 		self.setTitle(self.config.get('app', 'title'))
-		self.setSource(QUrl('ui/main.qml'))
+		self.setSource(QUrl(os.path.join(workDir, 'ui', 'main.qml')))
 		self.setResizeMode(QQuickView.SizeRootObjectToView)
 
 		rootContext = self.rootContext()
@@ -1084,7 +1084,10 @@ class VPlanMainWindow(QQuickView):
 			if msg.event == DsbMessage.EVENT_CREATE:
 				self.ebbPlanHandler.announcementAdded.emit(QVariant(anno))
 			elif msg.event == DsbMessage.EVENT_CHANGE:
-				self.ebbPlanHandler.announcementUpdate.emit(QVariant(anno))
+				if anno['release'] != '1':
+					self.ebbPlanHandler.announcementDelete.emit(QVariant(msg.id))
+				else:
+					self.ebbPlanHandler.announcementUpdate.emit(QVariant(anno))
 			elif msg.event == DsbMessage.EVENT_DELETE:
 				self.ebbPlanHandler.announcementDelete.emit(QVariant(msg.id))
 		elif msg.action == DsbMessage.ACTION_VPLAN:
@@ -1207,7 +1210,8 @@ class VPlanMainWindow(QQuickView):
 				self.ebbPlanHandler.newsAdded.emit(QVariant(news))
 		elif dataType == 'Announcement' and dataContent is not None:
 			for anno in dataContent:
-				self.ebbPlanHandler.announcementAdded.emit(QVariant(anno))
+				if anno['release'] == '1':
+					self.ebbPlanHandler.announcementAdded.emit(QVariant(anno))
 		elif dataType == 'Content':
 			""" 
 			Example:

@@ -1,0 +1,1016 @@
+{
+    "stand": 1430398080,
+    "standCanceled": 1430394775,
+    "days": ["2015-05-04", "2015-05-05", "2015-05-06"],
+    "changes": {
+        "1430690400": [{
+            "day": 1430690400,
+            "hour": 7,
+            "hourtext": "7.-8.",
+            "startTime": "13:30",
+            "endTime": "14:15",
+            "class": "11\/9 G",
+            "orig": {
+                "teacher": {
+                    "firstname": "Verena",
+                    "lastname": "Bergrath",
+                    "shortcut": "BERA",
+                    "isNamed": true,
+                    "displayName": "V. Bergrath"
+                },
+                "subject": {
+                    "name": "Englisch",
+                    "shortcut": "ENGL",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "203  WB GH"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "1",
+            "type": "64",
+            "lasthour": 8,
+            "raw": {
+                "class": "11\/9 G",
+                "hour": "7.-8.",
+                "what": "Englisch bei e. Bergrath",
+                "change": "Frei"
+            },
+            "uuid": "61e3378a-0e72-5311-8e4e-b808a8353d5e"
+        }, {
+            "day": 1430690400,
+            "hour": 3,
+            "hourtext": "3.-4.",
+            "startTime": "09:45",
+            "endTime": "10:30",
+            "class": "12",
+            "orig": {
+                "teacher": {
+                    "firstname": "Ulrich",
+                    "lastname": "Mauer",
+                    "shortcut": "MAUR",
+                    "isNamed": true,
+                    "displayName": "U. Mauer"
+                },
+                "subject": {
+                    "name": "Ethik",
+                    "shortcut": "ETHI",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A214"
+            },
+            "note": null,
+            "info": "Wegen VGL-Arbeit vorverlegt auf 27.4.",
+            "school": "1",
+            "type": "2",
+            "lasthour": 4,
+            "raw": {
+                "class": "12",
+                "hour": "3.-4.",
+                "what": "Ethik bei l. Mauer",
+                "change": "in A214 (Wegen VGL-Arbeit vorverlegt auf 27.4.) "
+            },
+            "uuid": "3c8c119c-5ca2-58c7-ba4a-4d1327683e16"
+        }, {
+            "day": 1430690400,
+            "hour": 3,
+            "hourtext": "3.-4.",
+            "startTime": "09:45",
+            "endTime": "10:30",
+            "class": "12",
+            "orig": {
+                "teacher": {
+                    "firstname": "Verena",
+                    "lastname": "Bergrath",
+                    "shortcut": "BERA",
+                    "isNamed": true,
+                    "displayName": "V. Bergrath"
+                },
+                "subject": {
+                    "name": "Englisch GK",
+                    "shortcut": "ENGK",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "203  WB GH"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "1",
+            "type": "64",
+            "lasthour": 4,
+            "raw": {
+                "class": "12",
+                "hour": "3.-4.",
+                "what": "Englisch GK bei e. Bergrath",
+                "change": "Frei"
+            },
+            "uuid": "05c6ee7c-0cb3-5ed6-a741-ad543b9f45c0"
+        }, {
+            "day": 1430690400,
+            "hour": 5,
+            "hourtext": "5.-6.",
+            "startTime": "11:30",
+            "endTime": "12:15",
+            "class": "12",
+            "orig": {
+                "teacher": {
+                    "firstname": "Astrid",
+                    "lastname": "M\u00fcger",
+                    "shortcut": "M\u00dcGE",
+                    "isNamed": true,
+                    "displayName": "A. M\u00fcger"
+                },
+                "subject": {
+                    "name": "Geschichte",
+                    "shortcut": "GESC",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A209 WB"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "1",
+            "type": "64",
+            "lasthour": 6,
+            "raw": {
+                "class": "12",
+                "hour": "5.-6.",
+                "what": "Geschichte bei s. M\u00fcger",
+                "change": "Frei"
+            },
+            "uuid": "7a905d03-695e-5fa1-b624-da8d65765b89"
+        }, {
+            "day": 1430690400,
+            "hour": 1,
+            "hourtext": "1.-2.",
+            "startTime": "08:00",
+            "endTime": "08:45",
+            "class": "12",
+            "orig": {
+                "teacher": {
+                    "firstname": "Ulrich",
+                    "lastname": "Mauer",
+                    "shortcut": "MAUR",
+                    "isNamed": true,
+                    "displayName": "U. Mauer"
+                },
+                "subject": {
+                    "name": "Ethik",
+                    "shortcut": "ETHI",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "C02"
+            },
+            "note": null,
+            "info": "Wegen VGL-Arbeit vorverlegt auf 27.4.",
+            "school": "1",
+            "type": "2",
+            "lasthour": 2,
+            "raw": {
+                "class": "12",
+                "hour": "1.-2.",
+                "what": "Ethik bei l. Mauer",
+                "change": "in C02 (Wegen VGL-Arbeit vorverlegt auf 27.4.) "
+            },
+            "uuid": "03da4c7f-819d-5dbd-a055-7dc161351ba3"
+        }, {
+            "day": 1430690400,
+            "hour": 1,
+            "hourtext": "1.-2.",
+            "startTime": "08:00",
+            "endTime": "08:45",
+            "class": "12",
+            "orig": {
+                "teacher": {
+                    "firstname": "Andrea",
+                    "lastname": "Wellan-Ely",
+                    "shortcut": "WELL",
+                    "isNamed": true,
+                    "displayName": "A. Wellan-Ely"
+                },
+                "subject": {
+                    "name": "Mathematik GK",
+                    "shortcut": "MAGK",
+                    "isNamed": true
+                },
+                "room": "204 Ph B"
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A204 WB"
+            },
+            "note": null,
+            "info": null,
+            "school": "1",
+            "type": "2",
+            "lasthour": 2,
+            "raw": {
+                "class": "12",
+                "hour": "1.-2.",
+                "what": "Mathematik GK bei n. Wellan-Ely",
+                "change": "in A204 WB "
+            },
+            "uuid": "4c7f0514-d681-553c-9d1d-e3a2104e81b8"
+        }, {
+            "day": 1430690400,
+            "hour": "7",
+            "hourtext": "7.",
+            "startTime": "13:30",
+            "endTime": "14:15",
+            "class": "13",
+            "orig": {
+                "teacher": {
+                    "firstname": "Astrid",
+                    "lastname": "M\u00fcger",
+                    "shortcut": "M\u00dcGE",
+                    "isNamed": true,
+                    "displayName": "A. M\u00fcger"
+                },
+                "subject": {
+                    "name": "Geschichte",
+                    "shortcut": "GESC",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A209 WB"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "1",
+            "type": "64",
+            "raw": {
+                "class": "13",
+                "hour": "7.",
+                "what": "Geschichte bei s. M\u00fcger",
+                "change": "Frei"
+            },
+            "uuid": "7a905d03-695e-5fa1-b624-da8d65765b89"
+        }, {
+            "day": 1430690400,
+            "hour": 1,
+            "hourtext": "1.-2.",
+            "startTime": "08:00",
+            "endTime": "08:45",
+            "class": "13",
+            "orig": {
+                "teacher": {
+                    "firstname": "Verena",
+                    "lastname": "Bergrath",
+                    "shortcut": "BERA",
+                    "isNamed": true,
+                    "displayName": "V. Bergrath"
+                },
+                "subject": {
+                    "name": "Englisch GK",
+                    "shortcut": "ENGK",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A306  WB"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "1",
+            "type": "64",
+            "lasthour": 2,
+            "raw": {
+                "class": "13",
+                "hour": "1.-2.",
+                "what": "Englisch GK bei e. Bergrath",
+                "change": "Frei"
+            },
+            "uuid": "05c6ee7c-0cb3-5ed6-a741-ad543b9f45c0"
+        }, {
+            "day": 1430690400,
+            "hour": "5",
+            "hourtext": "5.",
+            "startTime": "11:30",
+            "endTime": "12:15",
+            "class": "1151",
+            "orig": {
+                "teacher": {
+                    "firstname": "Corinna",
+                    "lastname": "Snopek",
+                    "shortcut": "SNOP",
+                    "isNamed": true,
+                    "displayName": "C. Snopek"
+                },
+                "subject": {
+                    "name": "Englisch",
+                    "shortcut": "ENGL",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "C05"
+            },
+            "note": null,
+            "info": "In die Betriebe, wurde vorgeholt",
+            "school": "2",
+            "type": "2",
+            "raw": {
+                "class": "1151",
+                "hour": "5.",
+                "what": "Englisch bei o. Snopek",
+                "change": "in C05 (In die Betriebe, wurde vorgeholt) "
+            },
+            "uuid": "14a8f543-802d-578a-b904-3e11bbb08e12"
+        }, {
+            "day": 1430690400,
+            "hour": 1,
+            "hourtext": "1.-2.",
+            "startTime": "08:00",
+            "endTime": "08:45",
+            "class": "1192",
+            "orig": {
+                "teacher": {
+                    "firstname": "Robert",
+                    "lastname": "Bock",
+                    "shortcut": "BOCK",
+                    "isNamed": true,
+                    "displayName": "R. Bock"
+                },
+                "subject": {
+                    "name": "I+K",
+                    "shortcut": "I+K",
+                    "isNamed": false
+                },
+                "room": "A204 WB"
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A107 DV B"
+            },
+            "note": null,
+            "info": null,
+            "school": "4",
+            "type": "2",
+            "lasthour": 2,
+            "raw": {
+                "class": "1192",
+                "hour": "1.-2.",
+                "what": "I+K bei o. Bock",
+                "change": "in A107 DV B "
+            },
+            "uuid": "e7c48845-d2ca-514b-8887-2332506d8fa4"
+        }, {
+            "day": 1430690400,
+            "hour": 1,
+            "hourtext": "1.-2.",
+            "startTime": "08:00",
+            "endTime": "08:45",
+            "class": "1291",
+            "orig": {
+                "teacher": {
+                    "firstname": "Alexander",
+                    "lastname": "Rohde",
+                    "shortcut": "ROHD",
+                    "isNamed": true,
+                    "displayName": "A. Rohde"
+                },
+                "subject": {
+                    "name": "VCU",
+                    "shortcut": "VCU",
+                    "isNamed": false
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "C05"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "4",
+            "type": "64",
+            "lasthour": 2,
+            "raw": {
+                "class": "1291",
+                "hour": "1.-2.",
+                "what": "VCU bei l. Rohde",
+                "change": "Frei"
+            },
+            "uuid": "e9d8dd94-483f-5941-91ad-788a7f067fbf"
+        }],
+        "1430776800": [{
+            "day": 1430776800,
+            "hour": 9,
+            "hourtext": "9.-10.",
+            "startTime": "15:15",
+            "endTime": "16:00",
+            "class": "SPORT11",
+            "orig": {
+                "teacher": {
+                    "firstname": "Alexander",
+                    "lastname": "Rohde",
+                    "shortcut": "ROHD",
+                    "isNamed": true,
+                    "displayName": "A. Rohde"
+                },
+                "subject": {
+                    "name": "Sport",
+                    "shortcut": "SP11",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": {
+                    "firstname": "Robert",
+                    "lastname": "Lecher",
+                    "shortcut": "LECH",
+                    "isNamed": true,
+                    "displayName": "R. Lecher"
+                },
+                "subject": null,
+                "room": "NH1"
+            },
+            "note": null,
+            "info": null,
+            "school": "1",
+            "type": "6",
+            "lasthour": 10,
+            "raw": {
+                "class": "SPORT11",
+                "hour": "9.-10.",
+                "what": "Sport bei l. Rohde",
+                "change": "durch o.  in NH1 "
+            },
+            "uuid": "ef2cc0df-7880-592b-97f0-b186ab56638d"
+        }, {
+            "day": 1430776800,
+            "hour": 7,
+            "hourtext": "7.-8.",
+            "startTime": "13:30",
+            "endTime": "14:15",
+            "class": "SPORT11",
+            "orig": {
+                "teacher": {
+                    "firstname": "Alexander",
+                    "lastname": "Rohde",
+                    "shortcut": "ROHD",
+                    "isNamed": true,
+                    "displayName": "A. Rohde"
+                },
+                "subject": {
+                    "name": "Sport",
+                    "shortcut": "SP11",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": {
+                    "firstname": "Robert",
+                    "lastname": "Lecher",
+                    "shortcut": "LECH",
+                    "isNamed": true,
+                    "displayName": "R. Lecher"
+                },
+                "subject": null,
+                "room": "NH2"
+            },
+            "note": null,
+            "info": null,
+            "school": "1",
+            "type": "6",
+            "lasthour": 8,
+            "raw": {
+                "class": "SPORT11",
+                "hour": "7.-8.",
+                "what": "Sport bei l. Rohde",
+                "change": "durch o.  in NH2 "
+            },
+            "uuid": "0ca181b5-730b-53d1-bded-855b7cfb6a0b"
+        }, {
+            "day": 1430776800,
+            "hour": 7,
+            "hourtext": "7.-8.",
+            "startTime": "13:30",
+            "endTime": "14:15",
+            "class": "SPORT11",
+            "orig": {
+                "teacher": {
+                    "firstname": "Thomas",
+                    "lastname": "Meyke",
+                    "shortcut": "MEYK",
+                    "isNamed": true,
+                    "displayName": "T. Meyke"
+                },
+                "subject": {
+                    "name": "Sport",
+                    "shortcut": "SP11",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "NH1"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "1",
+            "type": "64",
+            "lasthour": 8,
+            "raw": {
+                "class": "SPORT11",
+                "hour": "7.-8.",
+                "what": "Sport bei h. Meyke",
+                "change": "Frei"
+            },
+            "uuid": "e4dbb517-377d-5984-b51a-f0d0b2eccb99"
+        }, {
+            "day": 1430776800,
+            "hour": "4",
+            "hourtext": "4.",
+            "startTime": "10:30",
+            "endTime": "11:15",
+            "class": "11\/12 M",
+            "orig": {
+                "teacher": {
+                    "firstname": "Katja",
+                    "lastname": "Justen",
+                    "shortcut": "JUST",
+                    "isNamed": true,
+                    "displayName": "K. Justen"
+                },
+                "subject": {
+                    "name": "Powi",
+                    "shortcut": "POWI",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": {
+                    "firstname": "Rainer",
+                    "lastname": "F\u00fcll",
+                    "shortcut": "F\u00dcLL",
+                    "isNamed": true,
+                    "displayName": "R. F\u00fcll"
+                },
+                "subject": null,
+                "room": "101 B"
+            },
+            "note": null,
+            "info": null,
+            "school": "1",
+            "type": "6",
+            "raw": {
+                "class": "11\/12 M",
+                "hour": "4.",
+                "what": "Powi bei a. Justen",
+                "change": "durch a.  in 101 B "
+            },
+            "uuid": "6d808143-7782-5dcd-868c-ce30b317df8e"
+        }, {
+            "day": 1430776800,
+            "hour": 7,
+            "hourtext": "7.-9.",
+            "startTime": "13:30",
+            "endTime": "14:15",
+            "class": "12",
+            "orig": {
+                "teacher": {
+                    "firstname": "Dirk",
+                    "lastname": "Fuhrmann",
+                    "shortcut": "FUHR",
+                    "isNamed": true,
+                    "displayName": "D. Fuhrmann"
+                },
+                "subject": {
+                    "name": "Geschichte",
+                    "shortcut": "GESC",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "303   WB"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "1",
+            "type": "64",
+            "lasthour": 9,
+            "raw": {
+                "class": "12",
+                "hour": "7.-9.",
+                "what": "Geschichte bei i. Fuhrmann",
+                "change": "Frei"
+            },
+            "uuid": "a451348d-8ab9-50f2-98b5-f65323e42e39"
+        }, {
+            "day": 1430776800,
+            "hour": 3,
+            "hourtext": "3.-5.",
+            "startTime": "09:45",
+            "endTime": "10:30",
+            "class": "13",
+            "orig": {
+                "teacher": {
+                    "firstname": "Melanie",
+                    "lastname": "Wicht",
+                    "shortcut": "WICH",
+                    "isNamed": true,
+                    "displayName": "M. Wicht"
+                },
+                "subject": {
+                    "name": "Wirtschaft",
+                    "shortcut": "WIRT",
+                    "isNamed": true
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "C05"
+            },
+            "note": null,
+            "info": "Betriebsbesichtigung Vitronic",
+            "school": "1",
+            "type": "2",
+            "lasthour": 5,
+            "raw": {
+                "class": "13",
+                "hour": "3.-5.",
+                "what": "Wirtschaft bei e. Wicht",
+                "change": "in C05 (Betriebsbesichtigung Vitronic) "
+            },
+            "uuid": "98d11db5-ee19-551b-81a7-0692d8618860"
+        }, {
+            "day": 1430776800,
+            "hour": 5,
+            "hourtext": "5.-6.",
+            "startTime": "11:30",
+            "endTime": "12:15",
+            "class": "1022",
+            "orig": {
+                "teacher": {
+                    "firstname": "Bianca",
+                    "lastname": "Reinhardt",
+                    "shortcut": "REIN",
+                    "isNamed": true,
+                    "displayName": "B. Reinhardt"
+                },
+                "subject": {
+                    "name": "BBUN",
+                    "shortcut": "BBUN",
+                    "isNamed": false
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A217"
+            },
+            "note": null,
+            "info": "In die Betriebe",
+            "school": "2",
+            "type": "2",
+            "lasthour": 6,
+            "raw": {
+                "class": "1022",
+                "hour": "5.-6.",
+                "what": "BBUN bei i. Reinhardt",
+                "change": "in A217 (In die Betriebe) "
+            },
+            "uuid": "b24c2624-425e-553b-aa19-dffc8f831dd4"
+        }, {
+            "day": 1430776800,
+            "hour": 1,
+            "hourtext": "1.-2.",
+            "startTime": "08:00",
+            "endTime": "08:45",
+            "class": "1022",
+            "orig": {
+                "teacher": {
+                    "firstname": "Johannes",
+                    "lastname": "Tiegel",
+                    "shortcut": "TIGL",
+                    "isNamed": true,
+                    "displayName": "J. Tiegel"
+                },
+                "subject": {
+                    "name": "BBUN",
+                    "shortcut": "BBUN",
+                    "isNamed": false
+                },
+                "room": "A214"
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "001 B"
+            },
+            "note": null,
+            "info": null,
+            "school": "2",
+            "type": "2",
+            "lasthour": 2,
+            "raw": {
+                "class": "1022",
+                "hour": "1.-2.",
+                "what": "BBUN bei o. Tiegel",
+                "change": "in 001 B "
+            },
+            "uuid": "69a98ddc-d1e0-53fc-a369-7a368ce7e6f4"
+        }, {
+            "day": 1430776800,
+            "hour": 5,
+            "hourtext": "5.-6.",
+            "startTime": "11:30",
+            "endTime": "12:15",
+            "class": "1025",
+            "orig": {
+                "teacher": {
+                    "firstname": "Robert",
+                    "lastname": "Lecher",
+                    "shortcut": "LECH",
+                    "isNamed": true,
+                    "displayName": "R. Lecher"
+                },
+                "subject": {
+                    "name": "BBUN",
+                    "shortcut": "BBUN",
+                    "isNamed": false
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "C14"
+            },
+            "note": null,
+            "info": "In die Betriebe",
+            "school": "2",
+            "type": "2",
+            "lasthour": 6,
+            "raw": {
+                "class": "1025",
+                "hour": "5.-6.",
+                "what": "BBUN bei o. Lecher",
+                "change": "in C14 (In die Betriebe) "
+            },
+            "uuid": "cf99c36e-6b28-53fb-b069-bf2539431830"
+        }, {
+            "day": 1430776800,
+            "hour": 3,
+            "hourtext": "3.-4.",
+            "startTime": "09:45",
+            "endTime": "10:30",
+            "class": "1025",
+            "orig": {
+                "teacher": {
+                    "firstname": "Bianca",
+                    "lastname": "Reinhardt",
+                    "shortcut": "REIN",
+                    "isNamed": true,
+                    "displayName": "B. Reinhardt"
+                },
+                "subject": {
+                    "name": "BBUN",
+                    "shortcut": "BBUN",
+                    "isNamed": false
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": {
+                    "firstname": "Robert",
+                    "lastname": "Lecher",
+                    "shortcut": "LECH",
+                    "isNamed": true,
+                    "displayName": "R. Lecher"
+                },
+                "subject": null,
+                "room": "A217"
+            },
+            "note": null,
+            "info": null,
+            "school": "2",
+            "type": "6",
+            "lasthour": 4,
+            "raw": {
+                "class": "1025",
+                "hour": "3.-4.",
+                "what": "BBUN bei i. Reinhardt",
+                "change": "durch o.  in A217 "
+            },
+            "uuid": "f5600832-eec0-5e8c-9083-7cf745c0cd7b"
+        }, {
+            "day": 1430776800,
+            "hour": 5,
+            "hourtext": "5.-6.",
+            "startTime": "11:30",
+            "endTime": "12:15",
+            "class": "1051",
+            "orig": {
+                "teacher": {
+                    "firstname": "Daniel",
+                    "lastname": "Jablonski",
+                    "shortcut": "JABL",
+                    "isNamed": true,
+                    "displayName": "D. Jablonski"
+                },
+                "subject": {
+                    "name": "BBUN",
+                    "shortcut": "BBUN",
+                    "isNamed": false
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": {
+                    "firstname": "Yvonne",
+                    "lastname": "Ungruh",
+                    "shortcut": "UNGR",
+                    "isNamed": true,
+                    "displayName": "Y. Ungruh"
+                },
+                "subject": null,
+                "room": "A112  WB"
+            },
+            "note": null,
+            "info": null,
+            "school": "2",
+            "type": "6",
+            "lasthour": 6,
+            "raw": {
+                "class": "1051",
+                "hour": "5.-6.",
+                "what": "BBUN bei a. Jablonski",
+                "change": "durch v.  in A112  WB "
+            },
+            "uuid": "f289adfa-7121-54f0-9962-6f47976add05"
+        }, {
+            "day": 1430776800,
+            "hour": 1,
+            "hourtext": "1.-2.",
+            "startTime": "08:00",
+            "endTime": "08:45",
+            "class": "1082",
+            "orig": {
+                "teacher": {
+                    "firstname": "Valerie",
+                    "lastname": "Vatman",
+                    "shortcut": "VATM",
+                    "isNamed": true,
+                    "displayName": "V. Vatman"
+                },
+                "subject": {
+                    "name": "Mathematik",
+                    "shortcut": "MATH",
+                    "isNamed": true
+                },
+                "room": "001 B"
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A214"
+            },
+            "note": null,
+            "info": null,
+            "school": "3",
+            "type": "2",
+            "lasthour": 2,
+            "raw": {
+                "class": "1082",
+                "hour": "1.-2.",
+                "what": "Mathematik bei a. Vatman",
+                "change": "in A214 "
+            },
+            "uuid": "3091a1a4-8220-5f74-8c6d-bf79fc52d452"
+        }, {
+            "day": 1430776800,
+            "hour": 1,
+            "hourtext": "1.-2.",
+            "startTime": "08:00",
+            "endTime": "08:45",
+            "class": "1162",
+            "orig": {
+                "teacher": {
+                    "firstname": "Bianca",
+                    "lastname": "Reinhardt",
+                    "shortcut": "REIN",
+                    "isNamed": true,
+                    "displayName": "B. Reinhardt"
+                },
+                "subject": {
+                    "name": "BBUN",
+                    "shortcut": "BBUN",
+                    "isNamed": false
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A306  WB"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "2",
+            "type": "64",
+            "lasthour": 2,
+            "raw": {
+                "class": "1162",
+                "hour": "1.-2.",
+                "what": "BBUN bei i. Reinhardt",
+                "change": "Frei"
+            },
+            "uuid": "ae42d35d-b10e-576c-837a-1afaadae592e"
+        }],
+        "1430863200": [{
+            "day": 1430863200,
+            "hour": 1,
+            "hourtext": "1.-2.",
+            "startTime": "08:00",
+            "endTime": "08:45",
+            "class": "1291",
+            "orig": {
+                "teacher": {
+                    "firstname": "Alexander",
+                    "lastname": "Rohde",
+                    "shortcut": "ROHD",
+                    "isNamed": true,
+                    "displayName": "A. Rohde"
+                },
+                "subject": {
+                    "name": "VCU",
+                    "shortcut": "VCU",
+                    "isNamed": false
+                },
+                "room": null
+            },
+            "diff": {
+                "teacher": null,
+                "subject": null,
+                "room": "A111"
+            },
+            "note": "Frei",
+            "info": null,
+            "school": "4",
+            "type": "64",
+            "lasthour": 2,
+            "raw": {
+                "class": "1291",
+                "hour": "1.-2.",
+                "what": "VCU bei l. Rohde",
+                "change": "Frei"
+            },
+            "uuid": "e9d8dd94-483f-5941-91ad-788a7f067fbf"
+        }]
+    },
+    "classes": ["11\/9 G", "12", "13", "1151", "1192", "1291", "11\/12 M", "SPORT11", "1022", "1025", "1051", "1162", "1082"],
+    "teacher": [],
+    "canceled": [],
+    "times": [1430690400, 1430776800, 1430863200]
+}
