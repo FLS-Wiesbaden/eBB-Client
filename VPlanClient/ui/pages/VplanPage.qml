@@ -64,6 +64,23 @@ Column {
 		onEbbConfigLoaded: {
 			lblRightColumn.text = ebbPlanHandler.rightTitle
 			lblLeftColumn.text = ebbPlanHandler.leftTitle
+			if (ebbPlanHandler.showTopBoxes) {
+				if (ebbHeadBox.state == 'hidden') {
+					ebbHeadBox.state = 'visible'
+					// Start only, if vplanTimer is also running!
+					if (vplanTimer.running) {
+						newsTimer.start()
+						annoTimer.start()
+					}
+				}
+			} else {
+				newsTimer.stop()
+				annoTimer.stop()
+
+				if (ebbHeadBox.state != 'hidden') {
+					ebbHeadBox.state = 'hidden'
+				}
+			}
 		}
 		// Data handlers:
 		onNewsAdded: {
@@ -80,17 +97,16 @@ Column {
 			var newsTmp = null
 			while (idx < newsListModel.count && foundIdx < 0) {
 				newsTmp = newsListModel.get(idx)
-				if (newsTmp.nid == news.id) {
+				if (newsTmp.nid == newsId) {
 					foundIdx = idx
+					break
 				}
 				idx += 1
 			}
-
 			if (foundIdx >= 0) {
-				newsListModel.remove(foundIdx)
-				if (foundIdx == aNewsIdx) {
-					nextNews()
-				}
+				newsListModel.set(foundIdx, {'nid': news.id, 'subject': news.subject, 'topic': news.topic, 'img': news.imgurl})
+			} else {
+				newsListModel.append({'nid': news.id, 'subject': news.subject, 'topic': news.topic, 'img': news.imgurl})
 			}
 		}
 		onNewsDeleted: {
@@ -100,15 +116,19 @@ Column {
 			var newsTmp = null
 			while (idx < newsListModel.count && foundIdx < 0) {
 				newsTmp = newsListModel.get(idx)
-				if (newsTmp.nid == newsId) {
+				if (newsTmp.nid == news.id) {
 					foundIdx = idx
+					break
 				}
 				idx += 1
 			}
+
 			if (foundIdx >= 0) {
-				newsListModel.set(foundIdx, {'nid': news.id, 'subject': news.subject, 'topic': news.topic, 'img': news.imgurl})
-			} else {
-				newsListModel.append({'nid': news.id, 'subject': news.subject, 'topic': news.topic, 'img': news.imgurl})
+				newsListModel.remove(foundIdx)
+				console.log('Removed news index ' + foundIdx + ' with id ' + news.id)
+				if (foundIdx == aNewsIdx) {
+					nextNews()
+				}
 			}
 		}
 		onAnnouncementAdded: {
@@ -130,6 +150,7 @@ Column {
 				annoTmp = annoListModel.get(idx)
 				if (annoTmp.aid == anno.id) {
 					foundIdx = idx
+					break
 				}
 				idx += 1
 			}
@@ -152,7 +173,6 @@ Column {
 			var foundIdx = -1
 			var idx = 0
 			var annoTmp = null
-			console.log('Must delete ' + annoId)
 			while (idx < annoListModel.count && foundIdx < 0) {
 				annoTmp = annoListModel.get(idx)
 				if (annoTmp.aid == annoId) {
@@ -166,7 +186,6 @@ Column {
 				annoListModel.remove(foundIdx)
 				console.log('Removed announcement index ' + foundIdx + ' with id ' + annoId)
 				if (foundIdx == aAnnoIdx) {
-					console.log('And it was the current index -> next announcement!')
 					nextAnnouncement()
 				}
 			}
@@ -312,148 +331,158 @@ Column {
 			border.color: '#ffffff'
 			z: 15
 
-			// Will be content.
-			Rectangle {
-				id: annoContent
-				height: parent.height - annoNav.height
+			ScrollView {
+				height: parent.height
 				width: parent.width
-				color: "#00000000"
-				border.color: "#00000000"
+				verticalScrollBarPolicy: Qt.ScrollBarAlwaysOff
+				horizontalScrollBarPolicy: Qt.ScrollBarAlwaysOff
 
-				Rectangle {
-					id: annoContainer1
-					height: parent.height
+				Flickable {
+					height: parent.height - annoNav.height
 					width: parent.width
-					property int idx: -1
-					property string uuid: ''
-					color: "#00000000"
-					border.color: "#00000000"
+					Rectangle {
+						id: annoContent
+						height: parent.height - annoNav.height
+						width: parent.width
+						color: "#00000000"
+						border.color: "#00000000"
 
-					Image {
-						id: annoIcon1
-						source: ""
-						height: 110
-						anchors.leftMargin: 20
-						anchors.verticalCenter: parent.verticalCenter
-						fillMode: Image.PreserveAspectFit
-						anchors.left: parent.left
-					}
-					Text {
-						id: annoText1
-						height: parent.height
-						width: parent.width - annoIcon1.width - 20 - 25
-						anchors.left: annoIcon1.right
-						anchors.leftMargin: 25
-						font.pointSize: 20
-						horizontalAlignment: Text.AlignLeft
-						verticalAlignment: Text.AlignVCenter
-						wrapMode: Text.WordWrap
-						text: ""
+						Rectangle {
+							id: annoContainer1
+							height: parent.height
+							width: parent.width
+							property int idx: -1
+							property string uuid: ''
+							color: "#00000000"
+							border.color: "#00000000"
 
-						Text {
-							id: annoTopic1
-							width: 168
-							height: 30
-							color: "#999999"
-							text: ""
-							anchors.top: parent.top
-							anchors.topMargin: 19
-							anchors.right: parent.right
-							anchors.rightMargin: 15
-							horizontalAlignment: Text.AlignRight
-							font.pixelSize: 17
-						}
-					}
-
-					Behavior on uuid {
-						ParallelAnimation {
-							NumberAnimation {
-								target: annoContainer2
-								properties: "x"
-								from: annoContent.x
-								to: (annoContent.x - annoContent.width)
-								duration: 1500
+							Image {
+								id: annoIcon1
+								source: ""
+								height: 110
+								anchors.leftMargin: 20
+								anchors.verticalCenter: parent.verticalCenter
+								fillMode: Image.PreserveAspectFit
+								anchors.left: parent.left
 							}
-							NumberAnimation {
-								target: annoContainer1
-								properties: "x"
-								from: (annoContent.x + annoContent.width)
-								to: annoContent.x
-								duration: 1500
+							Text {
+								id: annoText1
+								height: parent.height
+								width: parent.width - annoIcon1.width - 20 - 25
+								anchors.left: annoIcon1.right
+								anchors.leftMargin: 25
+								font.pointSize: 20
+								horizontalAlignment: Text.AlignLeft
+								verticalAlignment: Text.AlignVCenter
+								wrapMode: Text.WordWrap
+								text: ""
+
+								Text {
+									id: annoTopic1
+									width: 168
+									height: 30
+									color: "#999999"
+									text: ""
+									anchors.top: parent.top
+									anchors.topMargin: 19
+									anchors.right: parent.right
+									anchors.rightMargin: 15
+									horizontalAlignment: Text.AlignRight
+									font.pixelSize: 17
+								}
+							}
+
+							Behavior on uuid {
+								ParallelAnimation {
+									NumberAnimation {
+										target: annoContainer2
+										properties: "x"
+										from: annoContent.x
+										to: (annoContent.x - annoContent.width)
+										duration: 500
+									}
+									NumberAnimation {
+										target: annoContainer1
+										properties: "x"
+										from: (annoContent.x + annoContent.width)
+										to: annoContent.x
+										duration: 500
+									}
+								}
+							}
+						}
+						Rectangle {
+							id: annoContainer2
+							height: parent.height
+							width: parent.width
+							x: parent.x + parent.width
+							y: parent.y
+							property int idx: -1
+							property string uuid: ''
+							color: "#00000000"
+							border.color: "#00000000"
+
+							Image {
+								id: annoIcon2
+								source: ""
+								height: 110
+								anchors.leftMargin: 20
+								anchors.verticalCenter: parent.verticalCenter
+								fillMode: Image.PreserveAspectFit
+								anchors.left: parent.left
+							}
+							Text {
+								id: annoText2
+								height: parent.height
+								width: parent.width - annoIcon2.width - 20 - 25
+								anchors.left: annoIcon2.right
+								anchors.leftMargin: 25
+								font.pointSize: 20
+								horizontalAlignment: Text.AlignLeft
+								verticalAlignment: Text.AlignVCenter
+								wrapMode: Text.WordWrap
+								text: ""
+
+								Text {
+									id: annoTopic2
+									width: 168
+									height: 30
+									color: "#999999"
+									text: ""
+									anchors.top: parent.top
+									anchors.topMargin: 19
+									anchors.right: parent.right
+									anchors.rightMargin: 15
+									horizontalAlignment: Text.AlignRight
+									font.pixelSize: 17
+								}
+							}
+
+							Behavior on uuid {
+								ParallelAnimation {
+									NumberAnimation {
+										target: annoContainer1
+										properties: "x"
+										from: annoContent.x
+										to: (annoContent.x - annoContent.width)
+										duration: 500
+									}
+									NumberAnimation {
+										target: annoContainer2
+										properties: "x"
+										from: (annoContent.x + annoContent.width)
+										to: annoContent.x
+										duration: 500
+									}
+								}
 							}
 						}
 					}
 				}
-				Rectangle {
-					id: annoContainer2
-					height: parent.height
-					width: parent.width
-					x: parent.x + parent.width
-					y: parent.y
-					property int idx: -1
-					property string uuid: ''
-					color: "#00000000"
-					border.color: "#00000000"
+			}
 
-					Image {
-						id: annoIcon2
-						source: ""
-						height: 110
-						anchors.leftMargin: 20
-						anchors.verticalCenter: parent.verticalCenter
-						fillMode: Image.PreserveAspectFit
-						anchors.left: parent.left
-					}
-					Text {
-						id: annoText2
-						height: parent.height
-						width: parent.width - annoIcon2.width - 20 - 25
-						anchors.left: annoIcon2.right
-						anchors.leftMargin: 25
-						font.pointSize: 20
-						horizontalAlignment: Text.AlignLeft
-						verticalAlignment: Text.AlignVCenter
-						wrapMode: Text.WordWrap
-						text: ""
-
-						Text {
-							id: annoTopic2
-							width: 168
-							height: 30
-							color: "#999999"
-							text: ""
-							anchors.top: parent.top
-							anchors.topMargin: 19
-							anchors.right: parent.right
-							anchors.rightMargin: 15
-							horizontalAlignment: Text.AlignRight
-							font.pixelSize: 17
-						}
-					}
-
-					Behavior on uuid {
-						ParallelAnimation {
-							NumberAnimation {
-								target: annoContainer1
-								properties: "x"
-								from: annoContent.x
-								to: (annoContent.x - annoContent.width)
-								duration: 1500
-							}
-							NumberAnimation {
-								target: annoContainer2
-								properties: "x"
-								from: (annoContent.x + annoContent.width)
-								to: annoContent.x
-								duration: 1500
-							}
-						}
-					}
-				}
-
-				ListModel {
-					id: annoListModel
-				}
+			ListModel {
+				id: annoListModel
 			}
 
 			// Will be navigation.
@@ -691,6 +720,41 @@ Column {
 				}
 			}
 		}
+
+		states: [
+			State {
+				name: "visible"
+				PropertyChanges { target: ebbHeadBox; visible: 1 }
+			},
+			State {
+				name: "hidden"
+				PropertyChanges { target: ebbHeadBox; visible: 0 }
+			}
+		]
+
+		transitions: [
+			Transition {
+				from: "hidden"
+				to: "visible"
+				NumberAnimation {
+					target: ebbHeadBox
+					properties: "y"
+					from: -ebbHeadBox.height
+					to: ebbHeadContainer.y + ebbHeadContainer.height
+					duration: 2000
+				}
+			},
+			Transition {
+				to: "hidden"
+				NumberAnimation {
+					target: ebbHeadBox
+					properties: "y"
+					from: ebbHeadBox.y
+					to: -ebbHeadBox.height
+					duration: 2000
+				}
+			}
+		]
 	}
 
 	Item {
@@ -1307,8 +1371,10 @@ Column {
 
 	function continuePlan() {
 		vplanTimer.start()
-		newsTimer.start()
-		annoTimer.start()
+		if (ebbPlanHandler.showTopBoxes) {
+			newsTimer.start()
+			annoTimer.start()
+		}
 	}
 
 	function suspendPlan() {

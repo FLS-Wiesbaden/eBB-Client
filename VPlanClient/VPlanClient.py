@@ -692,6 +692,9 @@ class EbbPlanHandler(QObject):
 	def _rightColumnTitle(self):
 		return self.flsConfig.get('vplan_tv', 'rightDescription')
 
+	def _showTopBoxes(self):
+		return self.ebbConfig.getboolean('appearance', 'showTopBoxes')
+
 	@pyqtSlot()
 	def onConnected(self):
 		self.connected.emit()
@@ -703,6 +706,7 @@ class EbbPlanHandler(QObject):
 	generateUuid = pyqtProperty(str, fget=_generateUuid)
 	leftTitle = pyqtProperty(str, fget=_leftColumnTitle)
 	rightTitle = pyqtProperty(str, fget=_rightColumnTitle)
+	showTopBoxes = pyqtProperty(bool, fget=_showTopBoxes)
 
 class EbbContentHandler(QObject):
 	modeChanged = pyqtSignal(QVariant, arguments=['toMode'])
