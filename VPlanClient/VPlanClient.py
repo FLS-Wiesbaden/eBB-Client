@@ -8,7 +8,6 @@ from html.parser import HTMLParser
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice, QMutex
 from PyQt5.QtCore import QMutexLocker, QTimer, QUrl, QVariant, QFile, QFileInfo, QUuid
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
-from PyQt5.QtWebKitWidgets import QWebPage
 from PyQt5.QtQuick import QQuickView
 from PyQt5.QtQml import qmlRegisterType
 from PyQt5.QtGui import QScreen
