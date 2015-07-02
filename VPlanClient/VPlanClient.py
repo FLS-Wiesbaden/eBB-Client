@@ -1362,75 +1362,78 @@ class VPlanMainWindow(QQuickView):
 
 		didx = 0
 		pidx = 0
-		for day in data['times']:
-			pageCounter = 0
-			newDay = {'day': '', 'abbr': '', 'name': '', 'txt': '', 'index': 0, 'pages': 0}
-			dt = datetime.datetime.fromtimestamp(day)
-			newDay['day'] = dt.strftime('%d.%m.%Y')
-			newDay['abbr'] = dt.strftime('%a')
-			newDay['name'] = dt.strftime('%A')
-			newDay['txt'] = dt.strftime('%A, %d.%m.%Y')
-			newDay['index'] = didx
+		if len(data) > 0:
+			for day in data['times']:
+				pageCounter = 0
+				newDay = {'day': '', 'abbr': '', 'name': '', 'txt': '', 'index': 0, 'pages': 0}
+				dt = datetime.datetime.fromtimestamp(day)
+				newDay['day'] = dt.strftime('%d.%m.%Y')
+				newDay['abbr'] = dt.strftime('%a')
+				newDay['name'] = dt.strftime('%A')
+				newDay['txt'] = dt.strftime('%A, %d.%m.%Y')
+				newDay['index'] = didx
 
-			entriesInPage = 0
-			for entry in data['changes'][str(day)]:
-				if len(planList) <= pidx:
-					planList.append([])
+				entriesInPage = 0
+				for entry in data['changes'][str(day)]:
+					if len(planList) <= pidx:
+						planList.append([])
 
-				newEntry = {'classn': '', 'hour': '', 'original': '', 'change': ''}
-				newEntry['classn'] = entry['raw']['class']
-				newEntry['hour'] = entry['raw']['hour']
-				newEntry['original'] = entry['raw']['what']
-				newEntry['change'] = entry['raw']['change']
-				tmpLen = len(entry['raw']['class'])
-				if tmpLen > maxFieldLengths['classn']: 
-					maxFieldLengths['classn'] = tmpLen
-				tmpLen = len(entry['raw']['hour'])
-				if tmpLen > maxFieldLengths['hour']: 
-					maxFieldLengths['hour'] = tmpLen
-				tmpLen = len(entry['raw']['what'])
-				if tmpLen > maxFieldLengths['original']: 
-					maxFieldLengths['original'] = tmpLen
-				tmpLen = len(entry['raw']['change'])
-				if tmpLen > maxFieldLengths['change']: 
-					maxFieldLengths['change'] = tmpLen
+					newEntry = {'classn': '', 'hour': '', 'original': '', 'change': ''}
+					newEntry['classn'] = entry['raw']['class']
+					newEntry['hour'] = entry['raw']['hour']
+					newEntry['original'] = entry['raw']['what']
+					newEntry['change'] = entry['raw']['change']
+					tmpLen = len(entry['raw']['class'])
+					if tmpLen > maxFieldLengths['classn']: 
+						maxFieldLengths['classn'] = tmpLen
+					tmpLen = len(entry['raw']['hour'])
+					if tmpLen > maxFieldLengths['hour']: 
+						maxFieldLengths['hour'] = tmpLen
+					tmpLen = len(entry['raw']['what'])
+					if tmpLen > maxFieldLengths['original']: 
+						maxFieldLengths['original'] = tmpLen
+					tmpLen = len(entry['raw']['change'])
+					if tmpLen > maxFieldLengths['change']: 
+						maxFieldLengths['change'] = tmpLen
 
-				planList[pidx].append(newEntry)
-				entriesInPage += 1
+					planList[pidx].append(newEntry)
+					entriesInPage += 1
 
-				if entriesInPage >= self.ebbPlanHandler.maxEntries:
-					entriesInPage = 0
-					pidx += 1
+					if entriesInPage >= self.ebbPlanHandler.maxEntries:
+						entriesInPage = 0
+						pidx += 1
+						pageCounter += 1
+				
+				if entriesInPage > 0:
 					pageCounter += 1
-			
-			if entriesInPage > 0:
-				pageCounter += 1
 
-			newDay['pages'] = pageCounter
-			dayList.append(newDay)
-			didx += 1
-			# and we really need new page for new date!
-			pidx += 1
+				newDay['pages'] = pageCounter
+				dayList.append(newDay)
+				didx += 1
+				# and we really need new page for new date!
+				pidx += 1
 
-		# calculate field factors...
-		maxFieldLengths['classn'] += 3
-		comLength = 0
-		for k, v in maxFieldLengths.items():
-			comLength += v
+			# calculate field factors...
+			maxFieldLengths['classn'] += 3
+			comLength = 0
+			for k, v in maxFieldLengths.items():
+				comLength += v
 
-		fieldFactor = {
-			'classn': 0,
-			'hour': 0,
-			'original': 0,
-			'change': 0
-		}
-		for k, v in maxFieldLengths.items():
-			fieldFactor[k] = round(v/comLength, 2)
+			fieldFactor = {
+				'classn': 0,
+				'hour': 0,
+				'original': 0,
+				'change': 0
+			}
+			for k, v in maxFieldLengths.items():
+				fieldFactor[k] = round(v/comLength, 2)
 
-		self.ebbPlanHandler.planColSizeChanged.emit(QVariant(fieldFactor))
+			self.ebbPlanHandler.planColSizeChanged.emit(QVariant(fieldFactor))
 
-		# now populate the data.
-		stand = datetime.datetime.fromtimestamp(data['stand']).strftime('%d.%m. %H:%M')
+			# now populate the data.
+			stand = datetime.datetime.fromtimestamp(data['stand']).strftime('%d.%m. %H:%M')
+		else:
+			stand = datetime.datetime.now().strftime('%d.%m. %H:%M')
 		self.ebbPlanHandler.planAvailable.emit(QVariant(dayList), QVariant(planList), stand)
 
 class ContentImageFinder(HTMLParser):
