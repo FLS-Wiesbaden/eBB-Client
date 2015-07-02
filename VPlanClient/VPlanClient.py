@@ -59,9 +59,8 @@ def verify_cb(conn, cert, errnum, depth, ok):
 	certSubject = cert.get_subject()
 
 	# FIXME: make it configurable and not fix! (Like a string...)
-	if depth == 0 and certIssuer is not None and certIssuer.commonName == 'CAcert Class 3 Root' \
-		and certSubject.OU == 'Website-Team' \
-		and certSubject.CN == 'pytools.fls-wiesbaden.de':
+	if depth == 0 and certIssuer is not None and certIssuer.commonName == globConfig.get('connection', 'verifyIssuer') \
+		and certSubject.CN == globConfig.get('connection', 'verifyCommonName'):
 		return ok
 	elif depth > 0 and depth < 3:
 		return ok
