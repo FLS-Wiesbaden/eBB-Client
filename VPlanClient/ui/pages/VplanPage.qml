@@ -40,6 +40,10 @@ Column {
 		onConnected: {
 			console.log('I\'m connected now!')
 			ebbContainer.loadPrimaryData()
+			ebbDayBox.color = "#00000000"
+		}
+		onDisconnected: {
+			ebbDayBox.color = "#DC8A8A"
 		}
 		onSuspendTv: {
 			console.log('Stopped change timer in SuspendTv')
@@ -949,7 +953,7 @@ Column {
 						Text {
 							id: txtCopy
 							color: "#3E3E3E"
-							text: "© Website-Team"
+							text: "© FLS Wiesbaden"
 							verticalAlignment: Text.AlignVCenter
 							horizontalAlignment: Text.AlignHCenter
 							z: 5

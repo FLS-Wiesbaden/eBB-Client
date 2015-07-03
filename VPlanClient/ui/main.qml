@@ -56,8 +56,8 @@ StackView {
 					pPdf.setLoop(true)
 				} else {
 					pContent = stackView.push(Qt.resolvedUrl('pages/ContentPage.qml'))
-					pContent.updateArrow(ebbContentHandler.contentArrow)
-					pContent.updateContent(ebbContentHandler.contentText)
+					pContent.updateArrow(ebbContentHandler.contentArrowDirection)
+					pContent.updateContent(ebbContentHandler.contentArrow, ebbContentHandler.contentText)
 				}
 			} else if (toMode == 'firealarm') {
 				pFirealarm = stackView.push(Qt.resolvedUrl('pages/FirealarmPage.qml'))
@@ -79,7 +79,7 @@ StackView {
 
 		onContentBodyChanged: {
 			if (currentMode == 'content') {
-				pContent.updateContent(ebbContentHandler.contentText)
+				pContent.updateContent(ebbContentHandler.contentArrow, ebbContentHandler.contentText)
 			}
 		}
 

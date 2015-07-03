@@ -5,8 +5,8 @@ import QtQuick.Window 2.2
 
 Item {
 	id: contentContainer
-	width: parent.width
-	height: parent.height
+    width: parent.width
+    height: parent.height
 
 	Item {
 		id: ebbHeadContainer
@@ -179,8 +179,10 @@ Item {
 			anchors.horizontalCenter: parent.horizontalCenter
 			anchors.top: contentItem.bottom
 			anchors.topMargin: 150
+			fillMode: Image.PreserveAspectFit
 			rotation: 0
 			source: "../../res/img/content_arrow.png"
+			height: (body.height - contentItem.height - 150) * 0.3
 
 			Behavior on rotation {
 				RotationAnimation {
@@ -192,11 +194,12 @@ Item {
 
 	}
 
-	function updateArrow(degrees) {
+    function updateArrow(degrees) {
 		contentArrow.rotation = degrees
 	}
 
-	function updateContent(content) {
+	function updateContent(arrow, content) {
 		contentText.text = content
-	}
+		contentArrow.visible = arrow
+    }
 }

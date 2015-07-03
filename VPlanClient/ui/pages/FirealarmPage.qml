@@ -30,6 +30,7 @@ Item {
 			anchors.leftMargin: 0
 			anchors.verticalCenter: parent.verticalCenter
 			rotation: 0
+			fillMode: Image.PreserveAspectFit
 			source: "../../res/img/fire_arrow.png"
 			visible: false
 
@@ -55,6 +56,7 @@ Item {
 			anchors.right: parent.right
 			anchors.rightMargin: 0
 			rotation: 0
+			fillMode: Image.PreserveAspectFit
 			source: "../../res/img/fire_arrow.png"
 
 			Behavior on rotation {

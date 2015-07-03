@@ -516,7 +516,7 @@ class DsbServer(QThread):
 								s.close()
 								self.sock = None
 						else:
-							log.info('Disconnect...')
+							log.info('Disconnect - remote issue?')
 							self.poller.unregister(s)
 							self.runState = False
 							s.shutdown(socket.SHUT_WR)
@@ -590,6 +590,7 @@ class EbbPlanHandler(QObject):
 	flsConfigLoaded = pyqtSignal()
 	ebbConfigLoaded = pyqtSignal()
 	connected = pyqtSignal()
+	disconnected = pyqtSignal()
 	suspendTv = pyqtSignal()
 	resumeTv = pyqtSignal()
 	loadDesignPictures = pyqtSignal([QUrl, QUrl], arguments=['headerCenterUrl', 'headerRptUrl'])
@@ -697,6 +698,10 @@ class EbbPlanHandler(QObject):
 	def onConnected(self):
 		self.connected.emit()
 
+	@pyqtSlot()
+	def onDisconnected(self):
+		self.disconnected.emit()		
+
 	config = pyqtProperty(str, fget=_config)
 	flscfg = pyqtProperty(str, fget=_flsConfig)
 	machineId = pyqtProperty(str, fget=_machineId)
@@ -734,12 +739,13 @@ class EbbContentHandler(QObject):
 		self.prevFireArrow = 0
 		self.currentMode = 'default'
 		self.contentBody = ''
+		self._contentArrow = False
 
 	def setEbbConfig(self, config):
 		self.ebbConfig = config
 		self.ebbConfigLoaded.emit()
 		if self.prevContentArrow != self.ebbConfig.getfloat('appearance', 'content_direction'):
-			self.contentArrowChanged.emit(self._contentArrow())
+			self.contentArrowChanged.emit(self._contentArrowDirection())
 			self.prevContentArrow = self.ebbConfig.getfloat('appearance', 'content_direction')
 		if self.prevFireArrow != self.ebbConfig.getfloat('appearance', 'escape_route_direction'):
 			self.fireArrowChanged.emit(self._fireArrow())
@@ -761,11 +767,14 @@ class EbbContentHandler(QObject):
 	def _machineId(self):
 		return self.ebbConfig.get('connection', 'machineId')
 
-	def _contentArrow(self):
+	def _contentArrowDirection(self):
 		return self.ebbConfig.getfloat('appearance', 'content_direction')
 
 	def _contentBody(self):
 		return QVariant(self.contentBody)
+
+	def getContentArrow(self):
+		return QVariant(self._contentArrow)
 
 	def _fireArrow(self):
 		return self.ebbConfig.getfloat('appearance', 'escape_route_direction')
@@ -776,8 +785,9 @@ class EbbContentHandler(QObject):
 	config = pyqtProperty(str, fget=_config)
 	flscfg = pyqtProperty(str, fget=_flsConfig)
 	machineId = pyqtProperty(str, fget=_machineId)
-	contentArrow = pyqtProperty(float, fget=_contentArrow)
+	contentArrowDirection = pyqtProperty(float, fget=_contentArrowDirection)
 	contentText = pyqtProperty(QVariant, fget=_contentBody)
+	contentArrow = pyqtProperty(QVariant, fget=getContentArrow)
 	fireArrow = pyqtProperty(float, fget=_fireArrow)
 	cycleTime = pyqtProperty(float, fget=_cycleTime)
 
@@ -852,6 +862,7 @@ class VPlanMainWindow(QQuickView):
 		self.sigSndScrShot.connect(self.server.sendScreenshot)
 		self.ebbContentHandler.modeChanged.connect(self.server.changeMode)
 		self.server.connected.connect(self.ebbPlanHandler.onConnected)
+		self.server.disconnected.connect(self.ebbPlanHandler.onDisconnected)
 		self.server.connected.connect(self.ebbContentHandler.onConnected)
 
 		self.server.start()
@@ -1113,17 +1124,20 @@ class VPlanMainWindow(QQuickView):
 				else:
 					self.ebbContentHandler.contentDeassigned.emit()
 					if dataContent is not None \
-						and type(dataContent).__name__ == 'dict' \
-						and self.ebbContentHandler.contentBody != dataContent['content']:
+						and type(dataContent).__name__ == 'dict' and \
+						( self.ebbContentHandler.contentBody != dataContent['content'] \
+							or self.ebbContentHandler._contentArrow != dataContent['arrow']):
 						self.ebbContentHandler.contentBody = dataContent['content']
+						self.ebbContentHandler._contentArrow = dataContent['arrow']
 						self.ebbContentHandler.contentBodyChanged.emit()
 		elif msg.action == DsbMessage.ACTION_MODE:
 			if msg.event == DsbMessage.EVENT_CHANGE:
 				toMode = msg.value
 				if toMode in ['content', 'default', 'firealarm']:
+					# LUS: we do not do this here anymore, as long as we'll get the whole config. 
 					self.ebbContentHandler.modeChanged.emit(QVariant(toMode))
-					self.flsConfig.set('app', 'mode', toMode)
-					self.flsConfig.save(False)
+					#self.flsConfig.set('app', 'mode', toMode)
+					#self.flsConfig.save(False)
 					self.server.changeMode(toMode)
 				else:
 					log.error('Invalid destination mode given: %s' % (toMode,))
@@ -1239,8 +1253,11 @@ class VPlanMainWindow(QQuickView):
 				self.checkRequestContentPdf(dataContent['pdfUrl'])
 			else:
 				self.ebbContentHandler.contentDeassigned.emit()
-				if dataContent is not None and self.ebbContentHandler.contentBody != dataContent['content']:
+				if dataContent is not None and \
+				( self.ebbContentHandler.contentBody != dataContent['content'] \
+					or self.ebbContentHandler._contentArrow != dataContent['arrow']):
 					self.ebbContentHandler.contentBody = dataContent['content']
+					self.ebbContentHandler._contentArrow = dataContent['arrow']
 					self.ebbContentHandler.contentBodyChanged.emit()
 
 	def checkRequestContentPdf(self, pdfUrl):
