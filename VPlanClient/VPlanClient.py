@@ -522,6 +522,8 @@ class DsbServer(QThread):
 							s.shutdown(socket.SHUT_WR)
 							s.close()
 							self.sock = None
+							error = True
+							break
 					elif flag & select.POLLHUP:
 						log.info('Client hung up..')
 						self.poller.unregister(s)

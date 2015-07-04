@@ -1164,11 +1164,14 @@ Column {
 	}
 
 	function loadPrimaryData() {
-		aDayIdx = -1
-		aPageIdx = -1
-		dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
-		reloadListModels()
-		ebbPlanHandler.setMaxEntries(Math.round((vplanContentContainer.height / gridVplan.cellHeight)*2))
+		// Do this here only, if we don't have data yet!
+		if (aDayList.length <= 0) {
+			aDayIdx = -1
+			aPageIdx = -1
+			dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
+			reloadListModels()
+			ebbPlanHandler.setMaxEntries(Math.round((vplanContentContainer.height / gridVplan.cellHeight)*2))
+		}
 	}
 
 	function reloadListModels() {
