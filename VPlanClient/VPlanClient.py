@@ -224,6 +224,7 @@ class DsbServer(QThread):
 			self.sock = SSL.Connection(self.ctx, socket.socket(socket.AF_INET, socket.SOCK_STREAM))
 		else:
 			self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.sock.settimeout(5)
 
 		while tryNr >= 0:
 			try:
