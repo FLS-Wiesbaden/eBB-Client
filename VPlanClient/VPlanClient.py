@@ -1107,6 +1107,7 @@ class VPlanMainWindow(QQuickView):
 				self.ebbPlanHandler.announcementDelete.emit(QVariant(msg.id))
 		elif msg.action == DsbMessage.ACTION_VPLAN:
 			# request for plan again. 
+			log.info('Got a notification about a new plan. Reload plan...')
 			req = QNetworkRequest(QUrl(self.server.loadPlanUrl))
 			req.setPriority(QNetworkRequest.HighPriority)
 			self.manager.get(req)
