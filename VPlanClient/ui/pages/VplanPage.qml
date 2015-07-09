@@ -213,6 +213,12 @@ Column {
 			colOriginal = planSizes.original
 			colChange = planSizes.change
 		}
+		onReset: {
+			aDayList = []
+			aPlanList = []
+			annoListModel.clear()
+			newsListModel.clear()
+		}
 	}
 
 	Timer {

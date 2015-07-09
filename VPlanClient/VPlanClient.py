@@ -595,6 +595,7 @@ class EbbPlanHandler(QObject):
 	disconnected = pyqtSignal()
 	suspendTv = pyqtSignal()
 	resumeTv = pyqtSignal()
+	reset = pyqtSignal()
 	loadDesignPictures = pyqtSignal([QUrl, QUrl], arguments=['headerCenterUrl', 'headerRptUrl'])
 	# timer signals
 	timerChange = pyqtSignal([QVariant, QVariant, QVariant], arguments=['vplanInterval', 'newsInterval', 'annoInterval'])
@@ -1144,6 +1145,14 @@ class VPlanMainWindow(QQuickView):
 					self.server.changeMode(toMode)
 				else:
 					log.error('Invalid destination mode given: %s' % (toMode,))
+		elif msg.action == DsbMessage.ACTION_RESET:
+			if msg.event == DsbMessage.EVENT_TRIGGER:
+				# reset and load all data again!
+				log.info('Got a reset event. First disable all.')
+				self.ebbPlanHandler.reset.emit()
+				log.info('Now reload all data.')
+				self.loaded = False
+				self.loadPlanData()
 
 	@pyqtSlot()
 	def sendEbbState(self):
