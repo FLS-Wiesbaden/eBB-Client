@@ -24,9 +24,10 @@ from dsbmessage import DsbMessage
 from logging.handlers import WatchedFileHandler
 from urllib.request import urlopen, URLopener
 from urllib.parse import urlencode, urljoin
+from operator import attrgetter
 import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex
 import binascii, pickle, base64, traceback, urllib, urllib.request, subprocess, zlib, datetime
-import popplerqt5, shutil
+import popplerqt5, shutil, math
 
 __author__  = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2015 Website-Team Friedrich-List-Schule-Wiesbaden'
@@ -587,6 +588,276 @@ class DsbServer(QThread):
 		except Exception as e:
 			log.error('Could not close connection: %s' % (e,))
 
+class PlanEntry:
+
+	def __init__(self, day, startTime, endTime, className, hourText, uuid, what, change):
+		self.dtStart = datetime.datetime.fromtimestamp(day)
+		(hour, minute) = startTime.split(':')
+		self.dtStart = self.dtStart.replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
+		self.dtEnd = datetime.datetime.fromtimestamp(day)
+		(hour, minute) = endTime.split(':')
+		self.dtEnd = self.dtEnd.replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
+
+		# for sorting:
+		self.className = className
+		self.hour = hourText
+		self.uuid = uuid
+		self.original = what
+		self.change = change
+
+	def isRelevant(self, now=None, bufferTime = None):
+		if now is None:
+			now = datetime.datetime.now()
+
+		if bufferTime is not None:
+			return (self.dtEnd + datetime.timedelta(minutes=bufferTime)) > now
+		else:
+			return self.dtEnd > now
+
+	def getDict(self):
+		"""
+		The planList is a list which contains number of dicts with the following structure:
+		1. classn => class name
+		2. hour => hour
+		3. original => contains the original data.
+		4. change => contains the change information
+
+		The handling is different to the javascript solution. We minimize the effort, this software is there to run in
+		fullscreen on a window so we ignore resizing operations, etc. We have a couple number of entries which we
+		can show and based on this we pre-generate the pages. 
+		"""
+		return {'classn': self.className, 'hour': self.hour, 'original': self.original, 'change': self.change}
+
+class PlanDay:
+
+	def __init__(self, dt):
+		self.entries = []
+		self.eidx = -1
+		self.didx = 0
+		self.page = -1
+		self.dt = dt
+		self.day = dt.strftime('%d.%m.%Y')
+		self.abbr = dt.strftime('%a')
+		self.name = dt.strftime('%A')
+		self.txt = dt.strftime('%A, %d.%m.%Y')
+
+	def getDict(self, numEntries = 24):
+		"""
+		The dayList contains a list of days/dicts we show. It must fit more or less the structure in qml:
+		1. day => contains the date in format dd.mm.yyyy
+		2. abbr => contains the abbreviation of the weekday
+		3. name => contains the full weekday name.
+		4. txt => human readable formatted name -- e.g. Montag, 04.05.2015
+		5. index => contains the start index in the planList.
+		6. pages => tells us, how many pages are possible.
+		"""
+		return {'day': self.day, 'abbr': self.abbr, 'name': self.name, 'txt': self.txt, 'index': self.didx, 'pages': self.numPages(numEntries)}
+
+	def sortEntries(self):
+		self.entries = sorted(self.entries, key=attrgetter('className', 'hour'))
+
+	def numPages(self, maxEntries = 24):
+		return math.ceil(len(self.entries) / maxEntries)
+
+	def isRelevant(self):
+		return datetime.datetime.now() <= self.dt
+
+	def hasRemainingEntries(self, filterElapsed, now, bufferTime):
+		rlvEntries = [e for e in self.entries if not filterElapsed or e.isRelevant(now, bufferTime)]
+		return self.eidx < len(rlvEntries)
+
+	def getNextEntries(self, maxEntries, filterElapsed, now, bufferTime):
+		self.page += 1
+		self.eidx += 1
+		rlvEntries = [e for e in self.entries if not filterElapsed or e.isRelevant(now, bufferTime)]
+		maxIdx = self.eidx + maxEntries - 1 if (self.eidx + maxEntries) < len(rlvEntries) else len(rlvEntries) - 1
+		entries = []
+
+		for idx in range(self.eidx, maxIdx + 1):
+			entries.append(rlvEntries[idx].getDict())
+			self.eidx += 1
+
+		# we need a special sorting. Split it in the middle.
+		maxIdx = len(entries)
+		midIdx = math.ceil(len(entries) / 2)
+		left = entries[:midIdx]
+		right = entries[midIdx:]
+		entries = []
+		lidx = 0
+		ridx = 0
+
+		for i in range(0, maxIdx):
+			if ridx >= len(right):
+				entries.append(left[lidx])
+				lidx += 1
+			elif lidx >= len(left):
+				entries.append(right[ridx])
+				ridx += 1
+			else:
+				if (i % 2) == 0:
+					entries.append(left[lidx])
+					lidx += 1
+				else:
+					entries.append(right[ridx])
+					ridx += 1
+		
+		return entries
+
+	def getCurrentPageNo(self, maxEntries):
+		return self.page
+
+class VPlan(QObject):
+
+	def __init__(self, parent=None):
+		QObject.__init__(self, parent)
+		self.stand = datetime.datetime.now().strftime('%d.%m. %H:%M')
+		self.plan = {}
+		self.currentDay = None
+		self.fieldFactor = {
+			'classn': 0,
+			'hour': 0,
+			'original': 0,
+			'change': 0			
+		}
+		self.triggerPresenter = False
+
+	def loadPlan(self, data):
+		maxFieldLengths = {
+			'classn': 0,
+			'hour': 0,
+			'original': 0,
+			'change': 0			
+		}
+		fieldFactor = {
+			'classn': 0,
+			'hour': 0,
+			'original': 0,
+			'change': 0
+		}
+		planT = {}
+		
+		didx = 0
+		pidx = 0
+		if len(data) > 0:
+			for day in data['times']:
+				dt = datetime.datetime.fromtimestamp(day)
+				newDay = PlanDay(dt)
+				if str(day) not in planT.keys():
+					planT[str(day)] = newDay
+
+				for entry in data['changes'][str(day)]:
+					newEntry = PlanEntry(day, entry['startTime'], entry['endTime'], entry['raw']['class'], entry['raw']['hour'], entry['uuid'], entry['raw']['what'], entry['raw']['change'])
+					tmpLen = len(entry['raw']['class'])
+					if tmpLen > maxFieldLengths['classn']: 
+						maxFieldLengths['classn'] = tmpLen
+					tmpLen = len(entry['raw']['hour'])
+					if tmpLen > maxFieldLengths['hour']: 
+						maxFieldLengths['hour'] = tmpLen
+					tmpLen = len(entry['raw']['what'])
+					if tmpLen > maxFieldLengths['original']: 
+						maxFieldLengths['original'] = tmpLen
+					tmpLen = len(entry['raw']['change'])
+					if tmpLen > maxFieldLengths['change']: 
+						maxFieldLengths['change'] = tmpLen
+
+					planT[str(day)].entries.append(newEntry)
+
+				# now sort!
+				log.debug('Plan import: prased day %s' % (dt.strftime('%d.%m.'),))
+				planT[str(day)].sortEntries()
+
+			# calculate field factors...
+			maxFieldLengths['classn'] += 3
+			comLength = 0
+			for k, v in maxFieldLengths.items():
+				comLength += v
+
+			for k, v in maxFieldLengths.items():
+				fieldFactor[k] = round(v/comLength, 2)
+
+			# now populate the data.
+			self.stand = datetime.datetime.fromtimestamp(data['stand']).strftime('%d.%m. %H:%M')
+		else:
+			self.stand = datetime.datetime.now().strftime('%d.%m. %H:%M')
+
+		self.fieldFactor = fieldFactor
+		self.plan = planT
+
+	def getStand(self):
+		return self.stand
+
+	def setNextDay(self):
+		times = list(self.plan.keys())
+		times.sort()
+		idx = 0
+		for f in times:
+			if not self.plan[f].isRelevant():
+				del(self.plan[f])
+			else:
+				self.plan[f].didx = idx
+				idx += 1
+		times = list(self.plan.keys())
+		times.sort()
+
+		# no day selectable.
+		if len(times) == 0:
+			return None
+
+		# already a current day?
+		idx = -1
+		if self.currentDay is not None:
+			try:
+				idx = times.index(self.currentDay)
+			except ValueError:
+				self.currentDay = None
+
+		# ok.. next day?
+		idx += 1
+		if idx < len(times):
+			d = times[idx]
+		else:
+			if not self.triggerPresenter:
+				log.debug('We\'re add the end of the list. So trigger presenter next call.')
+				self.triggerPresenter = True
+				return self.currentDay
+			else:
+				self.triggerPresenter = False
+			d = times[0]
+
+		self.currentDay = d
+		self.plan[self.currentDay].eidx = -1
+		self.plan[self.currentDay].page = -1
+
+		return d
+
+	def getNextEntries(self, maxEntries, filterElapsed, now, bufferTime):
+		log.debug('VPlan::getNextEntries -> called.')
+		# check and set next day if neccessary.
+		if self.currentDay is None or not self.plan[self.currentDay].hasRemainingEntries(filterElapsed, now, bufferTime):
+			self.setNextDay()
+			log.debug('VPlan::getNextEntries -> nextDay was called.')
+			if self.triggerPresenter:
+				log.debug('VPlan::getNextEntries: Presenter will be active!')
+				return []
+			# could not select an entry
+			if self.currentDay is None:
+				return []
+
+		# now get next entries
+		return self.plan[self.currentDay].getNextEntries(maxEntries, filterElapsed, now, bufferTime)
+
+	def getCurrentPageNo(self, maxEntries):
+		if self.currentDay is None:
+			return 0
+		else:
+			return self.plan[self.currentDay].getCurrentPageNo(maxEntries)
+
+	def getCurrentDayIndex(self):
+		if self.currentDay is None:
+			return 0
+		else:
+			return self.plan[self.currentDay].didx
+
 class EbbPlanHandler(QObject):
 	siteReload = pyqtSignal()
 	flsConfigLoaded = pyqtSignal()
@@ -607,7 +878,8 @@ class EbbPlanHandler(QObject):
 	announcementAdded = pyqtSignal([QVariant], arguments=['anno'])
 	announcementUpdate = pyqtSignal([QVariant], arguments=['anno'])
 	announcementDelete = pyqtSignal([QVariant], arguments=['annoId'])
-	planAvailable = pyqtSignal([QVariant, QVariant, str], arguments=['newDayList', 'newPlanList', 'newStand'])
+
+	planAvailable = pyqtSignal()
 	planColSizeChanged = pyqtSignal([QVariant], arguments=['planSizes'])
 	cycleTimesChanged = pyqtSignal([QVariant, QVariant, QVariant, QVariant], arguments=['newsTime', 'annoTime', 'planTime', 'contentTime'])
 
@@ -624,6 +896,8 @@ class EbbPlanHandler(QObject):
 		self.newsInterval = 7
 		self.annoInterval = 4
 		self.uuidGenerator = QUuid()
+
+		self.plan = VPlan()
 
 	def setEbbConfig(self, config):
 		self.ebbConfig = config
@@ -663,6 +937,9 @@ class EbbPlanHandler(QObject):
 		self.siteReload.emit()
 		log.info('js wants me to reload!')
 
+	def _filterElapsed(self):
+		return self.ebbConfig.get('appearance', 'filter_elapsed_hour')
+
 	def _config(self):
 		return self.ebbConfig.toJson()
 
@@ -697,13 +974,47 @@ class EbbPlanHandler(QObject):
 	def _showTopBoxes(self):
 		return self.ebbConfig.getboolean('appearance', 'showTopBoxes')
 
+	def _getStand(self):
+		return self.plan.stand
+
+	def _getTimes(self):
+		times = []
+		didx = 0
+		timesKey = list(self.plan.plan.keys())
+		timesKey.sort()
+
+		for k in timesKey:
+			self.plan.plan[k].didx = didx
+			times.append(self.plan.plan[k].getDict(self.maxEntries))
+			didx += 1
+
+		return QVariant(times)
+
+	def _getNextPlan(self):
+		filterElapsed = self.ebbConfig.getboolean('appearance', 'filter_elapsed_hour')
+		now = datetime.datetime.now()
+		bufferTime = 0
+		if filterElapsed:
+			bufferTime = self.ebbConfig.getint('appearance', 'filter_elapsed_hour_buffer')
+		return QVariant(self.plan.getNextEntries(self.maxEntries, filterElapsed, now, bufferTime))
+
+	def _getPageNo(self):
+		return self.plan.getCurrentPageNo(self.maxEntries)
+
+	def _currentDayIndex(self):
+		return self.plan.getCurrentDayIndex()
+
+	def _triggerPresenter(self):
+		return self.plan.triggerPresenter
+
+
 	@pyqtSlot()
 	def onConnected(self):
 		self.connected.emit()
 
 	@pyqtSlot()
 	def onDisconnected(self):
-		self.disconnected.emit()		
+		self.disconnected.emit()
 
 	config = pyqtProperty(str, fget=_config)
 	flscfg = pyqtProperty(str, fget=_flsConfig)
@@ -713,6 +1024,14 @@ class EbbPlanHandler(QObject):
 	leftTitle = pyqtProperty(str, fget=_leftColumnTitle)
 	rightTitle = pyqtProperty(str, fget=_rightColumnTitle)
 	showTopBoxes = pyqtProperty(bool, fget=_showTopBoxes)
+
+	# plan
+	getStand = pyqtProperty(str, fget=_getStand)
+	getTimes = pyqtProperty(QVariant, fget=_getTimes)
+	getPageNo = pyqtProperty(int, fget=_getPageNo)
+	getNextPlan = pyqtProperty(QVariant, fget=_getNextPlan)
+	triggerPresenter = pyqtProperty(bool, fget=_triggerPresenter)
+	currentDayIndex = pyqtProperty(int, fget=_currentDayIndex)
 
 class EbbContentHandler(QObject):
 	modeChanged = pyqtSignal(QVariant, arguments=['toMode'])
@@ -1150,6 +1469,9 @@ class VPlanMainWindow(QQuickView):
 				# reset and load all data again!
 				log.info('Got a reset event. First disable all.')
 				self.ebbPlanHandler.reset.emit()
+				# clear the cache.
+				log.info('Clear the cache...')
+				self.manager.clearAccessCache()
 				log.info('Now reload all data.')
 				self.loaded = False
 				self.loadPlanData()
@@ -1165,6 +1487,7 @@ class VPlanMainWindow(QQuickView):
 	def loadPlanData(self):
 		if self.server.baseUrl is None:
 			self.loaded = False
+			return None
 		elif self.loaded:
 			return None
 		else:
@@ -1291,13 +1614,13 @@ class VPlanMainWindow(QQuickView):
 		baseName = QFileInfo(downloadPath).fileName()
 		sts = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
 
-		# print the header list
+		# get the date from server.
 		date = reply.rawHeader('Date').data().decode('utf-8')
 		# process only if it is a PDF / PS!
 		contentType = reply.rawHeader('Content-Type').data().decode('utf-8')
 		contentType = (contentType.split(';')[0]).strip().lower()
 		if contentType not in ['application/pdf', 'application/ps']:
-			log.info('File %s not a valid presentation file.' % (baseName,))
+			log.warning('File %s not a valid presentation file (type: %s).' % (baseName, contentType))
 			return False
 
 		baseDir = os.path.join('ebbPdfs/', baseName)
@@ -1320,8 +1643,8 @@ class VPlanMainWindow(QQuickView):
 		xDpi = 100
 		yDpi = 100
 		screen = self.screen()
-		xDpi = round(screen.physicalDotsPerInchX(), 0) * 3
-		yDpi = round(screen.physicalDotsPerInchY(), 0) * 3
+		xDpi = round(screen.physicalDotsPerInchX(), 0) * 2
+		yDpi = round(screen.physicalDotsPerInchY(), 0) * 2
 
 		# now we can convert.
 		doc = popplerqt5.Poppler.Document.load(os.path.join(baseDir, baseName))
@@ -1356,114 +1679,11 @@ class VPlanMainWindow(QQuickView):
 			self.ebbContentHandler.contentAssigned.emit()
 
 	def parseNewPlanData(self, data):
-		"""
-		The dayList contains a list of days/dicts we show. It must fit more or less the structure in qml:
-		1. day => contains the date in format dd.mm.yyyy
-		2. abbr => contains the abbreviation of the weekday
-		3. name => contains the full weekday name.
-		4. txt => human readable formatted name -- e.g. Montag, 04.05.2015
-		5. index => contains the start index in the planList.
-		6. pages => tells us, how many pages are possible.
-		"""
-		dayList = []
-		"""
-		The planList is a list which contains number of dicts with the following structure:
-		1. classn => class name
-		2. hour => hour
-		3. original => contains the original data.
-		4. change => contains the change information
-
-		The handling is different to the javascript solution. We minimize the effort, this software is there to run in
-		fullscreen on a window so we ignore resizing operations, etc. We have a couple number of entries which we
-		can show and based on this we pre-generate the pages. 
-		"""
-		planList = []
-
-		"""
-		To update the columns width accordingly, we determine here the factors later for updating.
-		"""
-		maxFieldLengths = {
-			'classn': 0,
-			'hour': 0,
-			'original': 0,
-			'change': 0
-		}
-
-		didx = 0
-		pidx = 0
-		if len(data) > 0:
-			for day in data['times']:
-				pageCounter = 0
-				newDay = {'day': '', 'abbr': '', 'name': '', 'txt': '', 'index': 0, 'pages': 0}
-				dt = datetime.datetime.fromtimestamp(day)
-				newDay['day'] = dt.strftime('%d.%m.%Y')
-				newDay['abbr'] = dt.strftime('%a')
-				newDay['name'] = dt.strftime('%A')
-				newDay['txt'] = dt.strftime('%A, %d.%m.%Y')
-				newDay['index'] = didx
-
-				entriesInPage = 0
-				for entry in data['changes'][str(day)]:
-					if len(planList) <= pidx:
-						planList.append([])
-
-					newEntry = {'classn': '', 'hour': '', 'original': '', 'change': ''}
-					newEntry['classn'] = entry['raw']['class']
-					newEntry['hour'] = entry['raw']['hour']
-					newEntry['original'] = entry['raw']['what']
-					newEntry['change'] = entry['raw']['change']
-					tmpLen = len(entry['raw']['class'])
-					if tmpLen > maxFieldLengths['classn']: 
-						maxFieldLengths['classn'] = tmpLen
-					tmpLen = len(entry['raw']['hour'])
-					if tmpLen > maxFieldLengths['hour']: 
-						maxFieldLengths['hour'] = tmpLen
-					tmpLen = len(entry['raw']['what'])
-					if tmpLen > maxFieldLengths['original']: 
-						maxFieldLengths['original'] = tmpLen
-					tmpLen = len(entry['raw']['change'])
-					if tmpLen > maxFieldLengths['change']: 
-						maxFieldLengths['change'] = tmpLen
-
-					planList[pidx].append(newEntry)
-					entriesInPage += 1
-
-					if entriesInPage >= self.ebbPlanHandler.maxEntries:
-						entriesInPage = 0
-						pidx += 1
-						pageCounter += 1
-				
-				if entriesInPage > 0:
-					pageCounter += 1
-
-				newDay['pages'] = pageCounter
-				dayList.append(newDay)
-				didx += 1
-				# and we really need new page for new date!
-				pidx += 1
-
-			# calculate field factors...
-			maxFieldLengths['classn'] += 3
-			comLength = 0
-			for k, v in maxFieldLengths.items():
-				comLength += v
-
-			fieldFactor = {
-				'classn': 0,
-				'hour': 0,
-				'original': 0,
-				'change': 0
-			}
-			for k, v in maxFieldLengths.items():
-				fieldFactor[k] = round(v/comLength, 2)
-
-			self.ebbPlanHandler.planColSizeChanged.emit(QVariant(fieldFactor))
-
-			# now populate the data.
-			stand = datetime.datetime.fromtimestamp(data['stand']).strftime('%d.%m. %H:%M')
-		else:
-			stand = datetime.datetime.now().strftime('%d.%m. %H:%M')
-		self.ebbPlanHandler.planAvailable.emit(QVariant(dayList), QVariant(planList), stand)
+		log.info('Got a new plan. Parse it now.')
+		self.ebbPlanHandler.plan.loadPlan(data)
+		log.info('Plan imported. Send triggers.')
+		self.ebbPlanHandler.planColSizeChanged.emit(QVariant(self.ebbPlanHandler.plan.fieldFactor))
+		self.ebbPlanHandler.planAvailable.emit()
 
 class ContentImageFinder(HTMLParser):
 

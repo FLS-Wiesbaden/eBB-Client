@@ -23,6 +23,8 @@ Column {
 	property int aMaxEntries: 0
 	property int aMissingEntries: 0
 	property bool aPresenterActive: false
+
+	property int aNumPages: 1
 	property var aDayList: []
 	property var aPlanList: []
 	property bool presenterPageAvailable: false
@@ -44,6 +46,12 @@ Column {
 		}
 		onDisconnected: {
 			ebbDayBox.color = "#DC8A8A"
+		}
+		onReset: {
+			aDayList = []
+			aPlanList = []
+			annoListModel.clear()
+			newsListModel.clear()
 		}
 		onSuspendTv: {
 			console.log('Stopped change timer in SuspendTv')
@@ -196,12 +204,13 @@ Column {
 		}
 		onPlanAvailable: {
 			console.log('Yeah... new plan is available.')
-			aDayList = newDayList
-			aPlanList = newPlanList
-			txtStand.text = qsTr('Stand: ') + newStand + ' h'
+			aDayList = ebbPlanHandler.getTimes
+			aPlanList = []
+			txtStand.text = qsTr('Stand: ') + ebbPlanHandler.getStand + ' h'
 			reloadListModels()
 			// restart timer - just to be sure, that he not immediately change
 			// the page!
+			prepareNextPage()
 			if (vplanTimer.running) {
 				vplanTimer.stop()
 				vplanTimer.start()
@@ -212,12 +221,6 @@ Column {
 			colHour = planSizes.hour
 			colOriginal = planSizes.original
 			colChange = planSizes.change
-		}
-		onReset: {
-			aDayList = []
-			aPlanList = []
-			annoListModel.clear()
-			newsListModel.clear()
 		}
 	}
 
@@ -1172,11 +1175,11 @@ Column {
 	function loadPrimaryData() {
 		// Do this here only, if we don't have data yet!
 		if (aDayList.length <= 0) {
-			aDayIdx = -1
-			aPageIdx = -1
+			aPlanList = []
+			txtStand.text = qsTr("Lade Daten...")
 			dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
 			reloadListModels()
-			ebbPlanHandler.setMaxEntries(Math.round((vplanContentContainer.height / gridVplan.cellHeight)*2))
+			ebbPlanHandler.setMaxEntries(Math.floor((vplanContentContainer.height / gridVplan.cellHeight)*2))
 		}
 	}
 
@@ -1279,81 +1282,68 @@ Column {
 	}
 
 	function nextPage() {
-		// first increase page counter!
-		if (aDayIdx < 0) {
-			aDayIdx = 0
-			aPageIdx = 0
-			aCurIdx = 0
+		if (ebbPlanHandler.triggerPresenter && ebbContainer.presenterPageAvailable) {
+			ebbContainer.suspendPlan()
+			ebbContainer.hookPresenter()
+			aDayIdx = -1
 		} else {
-			aPageIdx += 1
-			if (aPageIdx >= aDayList[aDayIdx]['pages']) {
-				if (ebbPlanHandler.showFutureDays) {
-					aDayIdx += 1
+			// Switch the plan... Do we have data??
+			if (aDayList.length <= 0) {
+				aDayIdx = -1
+				// Yeah.. here better show a note...
+				dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
+			} else {
+				// Change the next page..
+				if (activModel == 0) {
+					gridVplan2.model = vplanModelTemp
+					activModel = 1
 				} else {
-					// If there is any presenter page available => show it.
-					if (ebbContainer.presenterPageAvailable) {
-						aPageIdx = -1
-						ebbContainer.suspendPlan()
-						ebbContainer.hookPresenter()
-						return
-					}
+					gridVplan.model = vplanModel
+					activModel = 0
+				}
 
-					aPageIdx = 0
-					// If there is only one page, we don't have to continue here.
-					if (aDayList[aDayIdx]['pages'] == 1) {
-						return
+				// Set the current day index no.
+				aDayIdx = ebbPlanHandler.currentDayIndex
+
+				// If day changes, populate the no. of pages correct.
+				if (dayListView.currentIndex != aDayList[aDayIdx]['index']) {
+					dayPageListModel.clear()
+					for (var i = 0; i < aDayList[aDayIdx]['pages']; i++) {
+						dayPageListModel.append({'index': i, 'day': aDayList[aDayIdx]['day']})
 					}
 				}
-				aPageIdx = 0
+
+				// Set the current day!
+				dayListView.currentIndex = aDayList[aDayIdx]['index']
+				dayPageList.currentIndex = ebbPlanHandler.getPageNo
+				dayNameLabel.text = aDayList[aDayIdx]['txt']
 			}
-			if (aDayIdx < aDayList.length) {
-				aCurIdx = aDayList[aDayIdx]['index'] + aPageIdx
-			} else {
-				aCurIdx = aPlanList.length
-			}
-		}
-		if (aCurIdx >= aPlanList.length) {
-			// OK.. change page.. but don't do that always!
-			aDayIdx = -1
-			aPageIdx = -1
-			// stop the timer and wait for next...
-			// But only, if there is some kind of presenter available.
-			if (ebbContainer.presenterPageAvailable) {
-				ebbContainer.suspendPlan()
-				ebbContainer.hookPresenter()
-				return
-			} else {
-				aDayIdx = 0
-				aPageIdx = 0
-				aCurIdx = 0
-			}
-		}
-		if (aPlanList.length <= 0) {
-			aDayIdx = -1
-			aPageIdx = -1
-			// Yeah.. here better show a note...
-			dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
-			return
 		}
 
+		prepareNextPage()
+	}
+
+	function prepareNextPage() {
 		// first calculate the max. number of entries!
 		aMaxEntries = Math.round((vplanContentContainer.height / gridVplan.cellHeight)*2)
 
+		// Now prepare the next page.
 		if (activModel == 0) {
 			vplanModelTemp.clear()
 		} else {
 			vplanModel.clear()
 		}
 
-		for (var i = 0; i < aPlanList[aCurIdx].length; i++) {
+		aPlanList = ebbPlanHandler.getNextPlan
+		for (var i = 0; i < aPlanList.length; i++) {
 			if (activModel == 0) {
-				vplanModelTemp.append(aPlanList[aCurIdx][i]);
+				vplanModelTemp.append(aPlanList[i]);
 			} else {
-				vplanModel.append(aPlanList[aCurIdx][i]);
+				vplanModel.append(aPlanList[i]);
 			}
 		}
 
-		aMissingEntries = aMaxEntries - aPlanList[aCurIdx].length
+		aMissingEntries = aMaxEntries - aPlanList.length
 		for (var i = 0; i <= aMissingEntries; i++) {
 			if (activModel == 0) {
 				vplanModelTemp.append({"classn": "", "hour": "", "original": "", "change": ""})
@@ -1362,24 +1352,6 @@ Column {
 			}
 		}
 
-		if (activModel == 0) {
-			gridVplan2.model = vplanModelTemp
-			activModel = 1
-		} else {
-			gridVplan.model = vplanModel
-			activModel = 0
-		}
-		// And load the page of the day (but only if day changed...)
-		if (dayListView.currentIndex != aDayList[aDayIdx]['index']) {
-			dayPageListModel.clear()
-			for (var i = 0; i < aDayList[aDayIdx]['pages']; i++) {
-				dayPageListModel.append({'index': i, 'day': aDayList[aDayIdx]['day']})
-			}
-		}
-		// Set the current day!
-		dayListView.currentIndex = aDayList[aDayIdx]['index']
-		dayPageList.currentIndex = aPageIdx
-		dayNameLabel.text = aDayList[aDayIdx]['txt']
 	}
 
 	function continuePlan() {

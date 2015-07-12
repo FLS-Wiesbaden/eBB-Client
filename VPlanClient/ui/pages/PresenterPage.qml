@@ -43,6 +43,8 @@ Rectangle {
 					anchors.leftMargin: 1
 					anchors.topMargin: 1
 					source: imagePath
+					sourceSize.width: parent.width
+					sourceSize.height: parent.height
 					fillMode: Image.PreserveAspectFit
 					cache: false
 				}
