@@ -605,7 +605,7 @@ class PlanEntry:
 		self.original = what
 		self.change = change
 
-	def isRelevant(self, now=None, bufferTime = None):
+	def isRelevant(self, now = None, bufferTime = None):
 		if now is None:
 			now = datetime.datetime.now()
 
@@ -641,7 +641,7 @@ class PlanDay:
 		self.name = dt.strftime('%A')
 		self.txt = dt.strftime('%A, %d.%m.%Y')
 
-	def getDict(self, numEntries = 24):
+	def getDict(self, numEntries = 24, filterElapsed = False, now = None, bufferTime = None):
 		"""
 		The dayList contains a list of days/dicts we show. It must fit more or less the structure in qml:
 		1. day => contains the date in format dd.mm.yyyy
@@ -651,13 +651,21 @@ class PlanDay:
 		5. index => contains the start index in the planList.
 		6. pages => tells us, how many pages are possible.
 		"""
-		return {'day': self.day, 'abbr': self.abbr, 'name': self.name, 'txt': self.txt, 'index': self.didx, 'pages': self.numPages(numEntries)}
+		return {
+			'day': self.day, 
+			'abbr': self.abbr, 
+			'name': self.name, 
+			'txt': self.txt, 
+			'index': self.didx, 
+			'pages': self.numPages(numEntries, filterElapsed, now, bufferTime)
+		}
 
 	def sortEntries(self):
 		self.entries = sorted(self.entries, key=attrgetter('className', 'hour'))
 
-	def numPages(self, maxEntries = 24):
-		return math.ceil(len(self.entries) / maxEntries)
+	def numPages(self, maxEntries = 24, filterElapsed = False, now = None, bufferTime = None):
+		# yeah.. but this of course should be only for the relevant enries!!!
+		return math.ceil(len([e for e in self.entries if not filterElapsed or e.isRelevant(now, bufferTime)]) / maxEntries)
 
 	def isRelevant(self):
 		return datetime.datetime.now() <= self.dt
@@ -978,6 +986,12 @@ class EbbPlanHandler(QObject):
 		return self.plan.stand
 
 	def _getTimes(self):
+		filterElapsed = self.ebbConfig.getboolean('appearance', 'filter_elapsed_hour')
+		now = datetime.datetime.now()
+		bufferTime = 0
+		if filterElapsed:
+			bufferTime = self.ebbConfig.getint('appearance', 'filter_elapsed_hour_buffer')
+
 		times = []
 		didx = 0
 		timesKey = list(self.plan.plan.keys())
@@ -985,7 +999,7 @@ class EbbPlanHandler(QObject):
 
 		for k in timesKey:
 			self.plan.plan[k].didx = didx
-			times.append(self.plan.plan[k].getDict(self.maxEntries))
+			times.append(self.plan.plan[k].getDict(self.maxEntries, filterElapsed, now, bufferTime))
 			didx += 1
 
 		return QVariant(times)

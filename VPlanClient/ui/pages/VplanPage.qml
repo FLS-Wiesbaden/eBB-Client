@@ -1179,7 +1179,7 @@ Column {
 			txtStand.text = qsTr("Lade Daten...")
 			dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
 			reloadListModels()
-			ebbPlanHandler.setMaxEntries(Math.floor((vplanContentContainer.height / gridVplan.cellHeight)*2))
+			ebbPlanHandler.setMaxEntries(Math.floor(vplanContentContainer.height / (gridVplan.cellHeight + 27))*2)
 		}
 	}
 
@@ -1321,6 +1321,10 @@ Column {
 		}
 
 		prepareNextPage()
+		// Next page a presenter, but do we really have it?
+		if (ebbPlanHandler.triggerPresenter && !ebbContainer.presenterPageAvailable) {
+			prepareNextPage()
+		}
 	}
 
 	function prepareNextPage() {
