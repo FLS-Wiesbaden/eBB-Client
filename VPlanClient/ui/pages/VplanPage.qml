@@ -1304,15 +1304,13 @@ Column {
 
 				// Set the current day index no.
 				aDayIdx = ebbPlanHandler.currentDayIndex
-
-				// If day changes, populate the no. of pages correct.
-				if (dayListView.currentIndex != aDayList[aDayIdx]['index']) {
-					dayPageListModel.clear()
-					for (var i = 0; i < aDayList[aDayIdx]['pages']; i++) {
-						dayPageListModel.append({'index': i, 'day': aDayList[aDayIdx]['day']})
-					}
+				aDayList = ebbPlanHandler.getTimes
+				reloadListModels()
+				dayPageListModel.clear()
+				for (var i = 0; i < aDayList[aDayIdx]['pages']; i++) {
+					dayPageListModel.append({'index': i, 'day': aDayList[aDayIdx]['day']})
 				}
-
+				
 				// Set the current day!
 				dayListView.currentIndex = aDayList[aDayIdx]['index']
 				dayPageList.currentIndex = ebbPlanHandler.getPageNo

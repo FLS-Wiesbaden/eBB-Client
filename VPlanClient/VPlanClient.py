@@ -668,7 +668,7 @@ class PlanDay:
 		return math.ceil(len([e for e in self.entries if not filterElapsed or e.isRelevant(now, bufferTime)]) / maxEntries)
 
 	def isRelevant(self):
-		return datetime.datetime.now() <= self.dt
+		return datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) <= self.dt
 
 	def hasRemainingEntries(self, filterElapsed, now, bufferTime):
 		rlvEntries = [e for e in self.entries if not filterElapsed or e.isRelevant(now, bufferTime)]
