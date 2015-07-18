@@ -667,8 +667,15 @@ class PlanDay:
 		# yeah.. but this of course should be only for the relevant enries!!!
 		return math.ceil(len([e for e in self.entries if not filterElapsed or e.isRelevant(now, bufferTime)]) / maxEntries)
 
-	def isRelevant(self):
-		return datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) <= self.dt
+	def hasRelevantEntries(self, filterElapsed, now, bufferTime):
+		return len([e for e in self.entries if not filterElapsed or e.isRelevant(now, bufferTime)]) > 0
+
+	def isRelevant(self, filterElapsed = False, now = None, bufferTime = None):
+		if now is None:
+			now = datetime.datetime.now()
+
+		return datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) <= self.dt and \
+		self.hasRelevantEntries(filterElapsed, now, bufferTime)
 
 	def hasRemainingEntries(self, filterElapsed, now, bufferTime):
 		rlvEntries = [e for e in self.entries if not filterElapsed or e.isRelevant(now, bufferTime)]
@@ -794,12 +801,12 @@ class VPlan(QObject):
 	def getStand(self):
 		return self.stand
 
-	def setNextDay(self):
+	def setNextDay(self, filterElapsed, now, bufferTime):
 		times = list(self.plan.keys())
 		times.sort()
 		idx = 0
 		for f in times:
-			if not self.plan[f].isRelevant():
+			if not self.plan[f].isRelevant(filterElapsed, now, bufferTime):
 				del(self.plan[f])
 			else:
 				self.plan[f].didx = idx
@@ -842,7 +849,7 @@ class VPlan(QObject):
 		log.debug('VPlan::getNextEntries -> called.')
 		# check and set next day if neccessary.
 		if self.currentDay is None or not self.plan[self.currentDay].hasRemainingEntries(filterElapsed, now, bufferTime):
-			self.setNextDay()
+			self.setNextDay(filterElapsed, now, bufferTime)
 			log.debug('VPlan::getNextEntries -> nextDay was called.')
 			if self.triggerPresenter:
 				log.debug('VPlan::getNextEntries: Presenter will be active!')
