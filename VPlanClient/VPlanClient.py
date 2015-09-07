@@ -848,7 +848,9 @@ class VPlan(QObject):
 	def getNextEntries(self, maxEntries, filterElapsed, now, bufferTime):
 		log.debug('VPlan::getNextEntries -> called.')
 		# check and set next day if neccessary.
-		if self.currentDay is None or not self.plan[self.currentDay].hasRemainingEntries(filterElapsed, now, bufferTime):
+		if self.currentDay is None \
+			or self.currentDay not in self.plan.keys() \
+			or not self.plan[self.currentDay].hasRemainingEntries(filterElapsed, now, bufferTime):
 			self.setNextDay(filterElapsed, now, bufferTime)
 			log.debug('VPlan::getNextEntries -> nextDay was called.')
 			if self.triggerPresenter:
@@ -1357,8 +1359,8 @@ class VPlanMainWindow(QQuickView):
 		log.info('Screensaver turned off %s' % ('successful' if exitCode == 0 else 'with errors',))
 
 		# already shown?
-		if self.isVisible():
-			return
+		#if self.isVisible():
+		#	return
 
 		if self.config.getboolean('app', 'fullScreenAtStartup'):
 			self.showFullScreen()
