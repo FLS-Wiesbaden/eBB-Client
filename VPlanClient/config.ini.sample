@@ -1,0 +1,73 @@
+[connection]
+pubkey = certs/dsbclient.crt
+verifydepth = 3
+cacert = certs/cacert.pem
+dsbname = 
+privkey = certs/dsbclient.wop.key
+pathmachine = /var/lib/dbus/machine-id
+authcertificate = /C=DE/ST=Hessia/L=Wiesbaden/O=xxx/OU=yyy/CN=zzz/emailAddress=dsb-client@xxx.de
+password = 
+host = 127.0.0.1
+username = 
+ssl = False
+port = 8080
+machineid = (output of /etc/machine-id)
+
+[debug]
+enabled = False
+date = 11.05.2015
+
+[appearance]
+escape_route_direction = 0
+news_cycle_time = 7
+filter_tomorrow_time = 30
+announcement_cycle_time = 4
+filter_tomorrow = True
+content_direction = 300
+announcement_default_text = Willkommen in der FLS Wiesbaden
+filter_elapsed_hour_buffer = 10
+filter_elapsed_hour = True
+news_count = 8
+filter_duplicate_hour = True
+content_cycle_time = 2
+plan_cycle_time = 5
+
+[mdc]
+host = 
+port = 1515
+enable = False
+dspid = 0
+
+[options]
+scrshotinterval = 10
+scrshotsize = 500
+
+[info]
+desc = mono
+name = mono
+
+[proxy]
+host = 192.168.10.10
+password = 
+port = 80
+enable = False
+username = 
+
+[app]
+starttime = 13
+mode = default
+title = FLS eBlackboard
+version = 0.9
+stoptime = 14
+fullscreenatstartup = True
+
+[ssh]
+enable = False
+pass = 
+compression = False
+key = 
+port = 22
+user = 
+timeout = 2
+restartcmd = sudo systemctl restart ebb@ebbclient.service
+
