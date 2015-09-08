@@ -778,7 +778,7 @@ class VPlan(QObject):
 					planT[str(day)].entries.append(newEntry)
 
 				# now sort!
-				log.debug('Plan import: prased day %s' % (dt.strftime('%d.%m.'),))
+				log.debug('Plan import: parsed day %s' % (dt.strftime('%d.%m.'),))
 				planT[str(day)].sortEntries()
 
 			# calculate field factors...
@@ -1253,7 +1253,8 @@ class VPlanMainWindow(QQuickView):
 			if self.config.getint('options', 'scrShotInterval') > 0:
 				self.scrShotTimer.start()
 			del timerActive
-			if self.config.getboolean('appearance', 'filter_elapsed_hour'):
+			if self.config.getboolean('appearance', 'filter_elapsed_hour') \
+			 or self.config.getboolean('appearance', 'filter_tomorrow'):
 				self.elapsedHourTimer.stop()
 				self.calculateNextHourTimer()
 
@@ -1339,16 +1340,39 @@ class VPlanMainWindow(QQuickView):
 		log.info('Next event of nextDayTimer: %s milliseconds' % (str(self.dayChangeTimer.interval()),))
 
 	def calculateNextHourTimer(self):
-		if not self.config.getboolean('appearance', 'filter_elapsed_hour'):
+		if not self.config.getboolean('appearance', 'filter_elapsed_hour') \
+		 and not self.config.getboolean('appearance', 'filter_tomorrow'):
 			return
 
 		now = datetime.datetime.now()
+		# what would be the "filter tomorrow" time?
+		tomorrow = None
+		if self.config.getboolean('appearance', 'filter_tomorrow'):
+			after  = self.flsConfig.getint('vplan', 'school_start')
+			after += self.config.getint('appearance', 'filter_tomorrow_time')
+			tomorrow = now.replace(hour=0, minute=0, second=0)
+			tomorrow += datetime.timedelta(minutes=after)
+			if tomorrow < now:
+				tomorrow += datetime.timedelta(days=1)
+		
 		# in the night, 1-5 minutes are no problems.
-		destination = (now + datetime.timedelta(hours=1)).replace(minute=self.config.getint('appearance', 'filter_elapsed_hour_buffer'), second=5)
+		destination = None
+		if self.config.getboolean('appearance', 'filter_elapsed_hour'):
+			destination = (now + datetime.timedelta(hours=1)).replace(minute=self.config.getint('appearance', 'filter_elapsed_hour_buffer'), second=5)
+
+		# Decide what is nearer (next regular or our filter_tomorrow end).
+		if destination is None and tomorrow is None:
+			return
+		elif destination is None or tomorrow < destination:
+			destination = tomorrow
+
+		# set and start the timer
 		self.elapsedHourTimer.setInterval(round((destination-now).total_seconds()*1000))
-		# and now start...
 		self.elapsedHourTimer.start()
-		log.info('Next event of nextHourTimer: %s milliseconds' % (str(self.elapsedHourTimer.interval()),))
+		log.info('Next event of nextHourTimer: %s milliseconds (destination is: %s)' % (
+			str(self.elapsedHourTimer.interval()),
+			destination.strftime('%d.%m.%Y %H:%M:%S')
+		))
 
 	@pyqtSlot()
 	def showEBB(self):
@@ -1545,10 +1569,10 @@ class VPlanMainWindow(QQuickView):
 	@pyqtSlot(QNetworkReply)
 	def dataLoadFinished(self, reply):
 		# first retrieve the ebb content type (X-eBB-Type).
-		if not reply.hasRawHeader('X-eBB-Type'.encode('utf-8')):
+		if not reply.hasRawHeader(QByteArray.fromRawData('X-eBB-Type'.encode('utf-8'))):
 			dataType = 'binary'
 		else:
-			dataType = reply.rawHeader('X-eBB-Type'.encode('utf-8')).data().decode('utf-8')
+			dataType = reply.rawHeader(QByteArray.fromRawData('X-eBB-Type'.encode('utf-8'))).data().decode('utf-8')
 
 		# are there any errors?
 		if reply.error():
@@ -1628,8 +1652,8 @@ class VPlanMainWindow(QQuickView):
 			# the pdf does already exist. So get the modified information.
 			sta = os.stat(os.path.join(baseDir, baseName)).st_mtime
 			dt = datetime.datetime.fromtimestamp(sta)
-			modified = dt.strftime('%a, %d %b %Y %T GMT')
-			req.setRawHeader('If-Modified-Since', modified)
+			modified = QByteArray.fromRawData(dt.strftime('%a, %d %b %Y %T GMT').encode('utf-8'))
+			req.setRawHeader(QByteArray.fromRawData('If-Modified-Since'.encode('utf-8')), modified)
 		self.manager.get(req)
 
 	def finishedDownloadingPdf(self, reply):
@@ -1638,9 +1662,9 @@ class VPlanMainWindow(QQuickView):
 		sts = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
 
 		# get the date from server.
-		date = reply.rawHeader('Date').data().decode('utf-8')
+		date = reply.rawHeader(QByteArray.fromRawData('Date'.encode('utf-8'))).data().decode('utf-8')
 		# process only if it is a PDF / PS!
-		contentType = reply.rawHeader('Content-Type').data().decode('utf-8')
+		contentType = reply.rawHeader(QByteArray.fromRawData('Content-Type'.encode('utf-8'))).data().decode('utf-8')
 		contentType = (contentType.split(';')[0]).strip().lower()
 		if contentType not in ['application/pdf', 'application/ps']:
 			log.warning('File %s not a valid presentation file (type: %s).' % (baseName, contentType))
