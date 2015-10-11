@@ -674,7 +674,7 @@ class PlanDay:
 		if now is None:
 			now = datetime.datetime.now()
 
-		return datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) <= self.dt and \
+		return now.replace(hour=0, minute=0, second=0, microsecond=0) <= self.dt and \
 		self.hasRelevantEntries(filterElapsed, now, bufferTime)
 
 	def hasRemainingEntries(self, filterElapsed, now, bufferTime):
@@ -683,14 +683,17 @@ class PlanDay:
 
 	def getNextEntries(self, maxEntries, filterElapsed, now, bufferTime):
 		self.page += 1
-		self.eidx += 1
+		if self.eidx < 0:
+			self.eidx += 1
 		rlvEntries = [e for e in self.entries if not filterElapsed or e.isRelevant(now, bufferTime)]
 		maxIdx = self.eidx + maxEntries - 1 if (self.eidx + maxEntries) < len(rlvEntries) else len(rlvEntries) - 1
 		entries = []
 
 		for idx in range(self.eidx, maxIdx + 1):
 			entries.append(rlvEntries[idx].getDict())
-			self.eidx += 1
+
+		if len(entries) > 0:
+			self.eidx += len(entries)
 
 		# we need a special sorting. Split it in the middle.
 		maxIdx = len(entries)
@@ -997,6 +1000,8 @@ class EbbPlanHandler(QObject):
 	def _getTimes(self):
 		filterElapsed = self.ebbConfig.getboolean('appearance', 'filter_elapsed_hour')
 		now = datetime.datetime.now()
+		if self.ebbConfig.getboolean('debug', 'enabled'):
+			now = datetime.datetime.strptime(self.ebbConfig.get('debug', 'date'), '%d.%m.%Y %H:%M')
 		bufferTime = 0
 		if filterElapsed:
 			bufferTime = self.ebbConfig.getint('appearance', 'filter_elapsed_hour_buffer')
@@ -1016,6 +1021,8 @@ class EbbPlanHandler(QObject):
 	def _getNextPlan(self):
 		filterElapsed = self.ebbConfig.getboolean('appearance', 'filter_elapsed_hour')
 		now = datetime.datetime.now()
+		if self.ebbConfig.getboolean('debug', 'enabled'):
+			now = datetime.datetime.strptime(self.ebbConfig.get('debug', 'date'), '%d.%m.%Y %H:%M')
 		bufferTime = 0
 		if filterElapsed:
 			bufferTime = self.ebbConfig.getint('appearance', 'filter_elapsed_hour_buffer')

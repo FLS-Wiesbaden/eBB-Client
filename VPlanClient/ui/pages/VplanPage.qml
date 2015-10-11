@@ -1287,6 +1287,10 @@ Column {
 			ebbContainer.hookPresenter()
 			aDayIdx = -1
 		} else {
+			// Set the current day index no.
+			aDayIdx = ebbPlanHandler.currentDayIndex
+			aDayList = ebbPlanHandler.getTimes
+
 			// Switch the plan... Do we have data??
 			if (aDayList.length <= 0) {
 				aDayIdx = -1
@@ -1302,9 +1306,6 @@ Column {
 					activModel = 0
 				}
 
-				// Set the current day index no.
-				aDayIdx = ebbPlanHandler.currentDayIndex
-				aDayList = ebbPlanHandler.getTimes
 				reloadListModels()
 				dayPageListModel.clear()
 				for (var i = 0; i < aDayList[aDayIdx]['pages']; i++) {
