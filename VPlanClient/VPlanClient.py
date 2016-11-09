@@ -5,7 +5,7 @@ from OpenSSL import SSL
 from html.parser import HTMLParser
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice
 from PyQt5.QtCore import QTimer, QUrl, QVariant, QFile, QFileInfo, QUuid
-from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
+from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QNetworkReply
 from PyQt5.QtQuick import QQuickView
 from PyQt5.QtQml import qmlRegisterType
 from PyQt5 import QtGui, QtCore, QtWidgets
@@ -21,10 +21,10 @@ from urllib.request import URLopener
 from urllib.parse import urlencode, urljoin
 from operator import attrgetter
 import sys, os, socket, select, uuid, signal, queue, random, logging, json, shlex
-import base64, urllib.request, subprocess, datetime
+import base64, subprocess, datetime
 import popplerqt5, shutil, math
 
-__author__  = 'Lukas Schreiner'
+__author__ = 'Lukas Schreiner'
 __copyright__ = 'Copyright (C) 2012 - 2016 Website-Team Friedrich-List-Schule-Wiesbaden'
 __version__ = 0.9
 
@@ -282,7 +282,7 @@ class DsbServer(QThread):
 		return True if tryNr == -1 else False
 
 	def parseCommand(self, cmd):
-		quit = False
+		quitApp = False
 		code, msg, *args = cmd.rstrip().split(' - ')
 		log.debug('%s: %s' % (code, msg))
 
@@ -312,11 +312,11 @@ class DsbServer(QThread):
 		elif code == '402':
 			# uhhh we have a version mismatch!
 			log.critical('Version mismatch - you need at least "%s"' % (msg,))
-			quit = True
+			quitApp = True
 		elif code == '403':
 			# uhhh we don't have permission to connect! Close!
 			log.critical('No authorization ("%s") - will exit!' % (msg,))
-			quit = True
+			quitApp = True
 		elif code == '621':
 			log.info('Can\'t go offline. Ignore events.')
 		elif code == '623':
@@ -353,7 +353,7 @@ class DsbServer(QThread):
 			self.loadContentUrl = urls['content'] + '?raw=1&clientId=' + self.getMachineID()
 			self.urlLoaded.emit()
 
-		return quit
+		return quitApp
 
 	def processMessage(self, msg):
 		# let us read the json string.
@@ -528,13 +528,13 @@ class DsbServer(QThread):
 							log.error('error occurred while reading (ssl error): %s' % (e,))
 
 						if newData:
-							quit = False
+							quitApp = False
 							for cmdData in newData.decode('utf-8').split('\n'):
 								if len(cmdData.strip()) > 0:
-									quit = self.parseCommand(cmdData)
-									if quit:
+									quitApp = self.parseCommand(cmdData)
+									if quitApp:
 										break
-							if not quit:
+							if not quitApp:
 								self.poller.modify(s, DsbServer.READ_WRITE)
 							else:
 								log.info('Disconnect...')
@@ -642,17 +642,16 @@ class PlanEntry:
 			return self.dtEnd > now
 
 	def getDict(self):
-		"""
-		The planList is a list which contains number of dicts with the following structure:
-		1. classn => class name
-		2. hour => hour
-		3. original => contains the original data.
-		4. change => contains the change information
+		# The planList is a list which contains number of dicts with the following structure:
+		# 1. classn => class name
+		# 2. hour => hour
+		# 3. original => contains the original data.
+		# 4. change => contains the change information
 
-		The handling is different to the javascript solution. We minimize the effort, this software is there to run in
-		fullscreen on a window so we ignore resizing operations, etc. We have a couple number of entries which we
-		can show and based on this we pre-generate the pages. 
-		"""
+		# The handling is different to the javascript solution. We minimize the effort, this software is there to run in
+		# fullscreen on a window so we ignore resizing operations, etc. We have a couple number of entries which we
+		# can show and based on this we pre-generate the pages. 
+		
 		return {'classn': self.className, 'hour': self.hour, 'original': self.original, 'change': self.change}
 
 class PlanDay:
@@ -669,15 +668,14 @@ class PlanDay:
 		self.txt = dt.strftime('%A, %d.%m.%Y')
 
 	def getDict(self, numEntries = 24, filterElapsed = False, now = None, bufferTime = None):
-		"""
-		The dayList contains a list of days/dicts we show. It must fit more or less the structure in qml:
-		1. day => contains the date in format dd.mm.yyyy
-		2. abbr => contains the abbreviation of the weekday
-		3. name => contains the full weekday name.
-		4. txt => human readable formatted name -- e.g. Montag, 04.05.2015
-		5. index => contains the start index in the planList.
-		6. pages => tells us, how many pages are possible.
-		"""
+		# The dayList contains a list of days/dicts we show. It must fit more or less the structure in qml:
+		# 1. day => contains the date in format dd.mm.yyyy
+		# 2. abbr => contains the abbreviation of the weekday
+		# 3. name => contains the full weekday name.
+		# 4. txt => human readable formatted name -- e.g. Montag, 04.05.2015
+		# 5. index => contains the start index in the planList.
+		# 6. pages => tells us, how many pages are possible.
+		
 		return {
 			'day': self.day, 
 			'abbr': self.abbr, 
@@ -745,7 +743,7 @@ class PlanDay:
 				else:
 					entries.append(right[ridx])
 					ridx += 1
-		
+
 		return entries
 
 	def getCurrentPageNo(self, maxEntries):
@@ -878,11 +876,11 @@ class VPlan(QObject):
 
 	def getNextEntries(self, maxEntries, filterElapsed, now, bufferTime):
 		log.debug('VPlan::getNextEntries -> called.')
-		
+
 		# do we have any data??
 		if len(self.plan) == 0:
 			return []
-			
+
 		# check and set next day if neccessary.
 		if self.currentDay is None \
 			or self.currentDay not in list(self.plan.keys()) \
@@ -923,7 +921,7 @@ class EbbPlanHandler(QObject):
 	loadDesignPictures = pyqtSignal([QUrl, QUrl], arguments=['headerCenterUrl', 'headerRptUrl'])
 	# timer signals
 	timerChange = pyqtSignal([QVariant, QVariant, QVariant], arguments=['vplanInterval', 'newsInterval', 'annoInterval'])
-	 
+
 	# model signals
 	newsAdded = pyqtSignal([QVariant], arguments=['news'])
 	newsUpdate = pyqtSignal([QVariant], arguments=['news'])
@@ -1218,7 +1216,7 @@ class VPlanMainWindow(QQuickView):
 
 		self.enableCache()
 		self.enableProxy()
-		
+
 		self.setActions()
 		self.calculateNextDayTimer()
 		self.calculateNextHourTimer()
@@ -1641,20 +1639,18 @@ class VPlanMainWindow(QQuickView):
 				if anno['release'] == '1':
 					self.ebbPlanHandler.announcementAdded.emit(QVariant(anno))
 		elif dataType == 'Content':
-			""" 
-			Example:
-			{
-				'pdfUrl': 'http://fls.local/files/ebbPdf/553cd6320fcddreceipt_quadre_du_net.pdf', 
-				'cid': '14', 
-				'arrow': True, 
-				'modifyTime': '26.04.15 14:14', 'creator': 'Lukas Schreiner', 
-				'pdf': 'ebbPdf/553cd6320fcddreceipt_quadre_du_net.pdf', 
-				'modifier': 'Lukas Schreiner', 
-				'createTime': '26.04.15 14:14', 
-				'title': 'PPPPL', 
-				'content': ''
-			}
-			"""
+			# Example:
+			# {
+			# 	'pdfUrl': 'http://fls.local/files/ebbPdf/553cd6320fcddreceipt_quadre_du_net.pdf', 
+			# 	'cid': '14', 
+			# 	'arrow': True, 
+			# 	'modifyTime': '26.04.15 14:14', 'creator': 'Lukas Schreiner', 
+			# 	'pdf': 'ebbPdf/553cd6320fcddreceipt_quadre_du_net.pdf', 
+			# 	'modifier': 'Lukas Schreiner', 
+			# 	'createTime': '26.04.15 14:14', 
+			# 	'title': 'PPPPL', 
+			# 	'content': ''
+			# }
 			# by default nothing here.
 			self.ebbContentHandler.contentDeassigned.emit()
 			if type(dataContent).__name__ != 'dict':
