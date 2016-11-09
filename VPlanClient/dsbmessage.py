@@ -67,7 +67,7 @@ class DsbMessage:
 	def fromJsonString(sh, jsonStr):
 		try:
 			arr = json.loads(jsonStr)
-		except ValueError as e:
+		except ValueError:
 			raise
 		else:
 			self = sh()

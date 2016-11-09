@@ -1,40 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # vim: fenc=utf-8:ts=4:sw=4:si:sta:noet
-from Printer import Printer
 from OpenSSL import SSL
-from configparser import SafeConfigParser
 from html.parser import HTMLParser
-from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice, QMutex
-from PyQt5.QtCore import QMutexLocker, QTimer, QUrl, QVariant, QFile, QFileInfo, QUuid
+from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice
+from PyQt5.QtCore import QTimer, QUrl, QVariant, QFile, QFileInfo, QUuid
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkProxy, QAuthenticator, QNetworkReply
 from PyQt5.QtQuick import QQuickView
 from PyQt5.QtQml import qmlRegisterType
-from PyQt5.QtGui import QScreen
-from PyQt5 import QtGui, QtWebKit, QtCore, QtWidgets
+from PyQt5 import QtGui, QtCore, QtWidgets
 from time import sleep
 from ansistrm import ColorizingStreamHandler
-from observer import ObservableSubject, Observer, NotifyReceiver
+from observer import NotifyReceiver
 from flsconfiguration import FLSConfiguration
-from threading import Lock, Thread
+from threading import Thread
 from io import BytesIO
-from hashlib import sha512
-from struct import Struct
 from dsbmessage import DsbMessage
 from logging.handlers import WatchedFileHandler
-from urllib.request import urlopen, URLopener
+from urllib.request import URLopener
 from urllib.parse import urlencode, urljoin
 from operator import attrgetter
-import sys, os, socket, select, uuid, signal, queue, random, logging, abc, json, atexit, shlex
-import binascii, pickle, base64, traceback, urllib, urllib.request, subprocess, zlib, datetime
+import sys, os, socket, select, uuid, signal, queue, random, logging, json, shlex
+import base64, urllib.request, subprocess, datetime
 import popplerqt5, shutil, math
 
 __author__  = 'Lukas Schreiner'
-__copyright__ = 'Copyright (C) 2012 - 2015 Website-Team Friedrich-List-Schule-Wiesbaden'
+__copyright__ = 'Copyright (C) 2012 - 2016 Website-Team Friedrich-List-Schule-Wiesbaden'
 __version__ = 0.9
 
-FORMAT = '%(asctime)-15s %(message)s'
-formatter = logging.Formatter(FORMAT, datefmt='%b %d %H:%M:%S')
+formatter = logging.Formatter('%(asctime)-15s %(message)s', datefmt='%b %d %H:%M:%S')
 log = logging.getLogger()
 log.setLevel(logging.INFO)
 hdlr = ColorizingStreamHandler()
@@ -51,6 +45,40 @@ try:
 	_fromUtf8 = QtCore.QString.fromUtf8
 except AttributeError:
 	_fromUtf8 = lambda s: s
+
+def qt_message_handler(mode, context, message):
+	global log
+
+	if mode == QtCore.QtInfoMsg:
+		log.info(
+			'[qt]: line: %d, func: %s(), file: %s; %s' % (
+				context.line, context.function, context.file, message
+			)
+		)
+	elif mode == QtCore.QtWarningMsg:
+		log.warning(
+			'[qt]: line: %d, func: %s(), file: %s; %s' % (
+				context.line, context.function, context.file, message
+			)
+		)
+	elif mode == QtCore.QtCriticalMsg:
+		log.error(
+			'[qt]: line: %d, func: %s(), file: %s; %s' % (
+				context.line, context.function, context.file, message
+			)
+		)
+	elif mode == QtCore.QtFatalMsg:
+		log.critical(
+			'[qt]: line: %d, func: %s(), file: %s; %s' % (
+				context.line, context.function, context.file, message
+			)
+		)
+	else:
+		log.debug(
+			'[qt]: line: %d, func: %s(), file: %s; %s' % (
+				context.line, context.function, context.file, message
+			)
+		)
 
 def verify_cb(conn, cert, errnum, depth, ok):
 	# This obviously has to be updated
@@ -137,7 +165,7 @@ class DsbServer(QThread):
 			try:
 				with open(self.config.get('connection', 'pathMachine'), 'rb') as f:
 					machineId = f.read().strip().decode('utf-8')
-			except Exception as e:
+			except Exception:
 				log.warning('Dbus-File with machine id does not exist at %s' % (self.config.get('connection', 'pathMachine'),))
 
 			log.debug('Used machine id: %s' % (machineId,))
@@ -161,11 +189,11 @@ class DsbServer(QThread):
 	def quitEBB(self):
 		self.addData('goOffline;;')
 
-	@pyqtSlot(str)
+	@pyqtSlot(QVariant)
 	def sendState(self, state):
 		self.addData('go%s;;' % (state.capitalize(),))
 
-	@pyqtSlot(str)
+	@pyqtSlot(QVariant)
 	def changeMode(self, mode):
 		self.addData('mode;%s;' % (mode,))
 
@@ -230,7 +258,7 @@ class DsbServer(QThread):
 			try:
 				self.sock.connect((self.config.get('connection', 'host'), self.config.getint('connection', 'port')))
 				tryNr = -1
-			except socket.error as e:
+			except socket.error:
 				log.warning('Connection try #%i not possible!' % (tryNr,))
 				tryNr += 1
 				wait = random.randint(1, 5 + tryNr * 2)
@@ -281,7 +309,6 @@ class DsbServer(QThread):
 		elif code == '303':
 			log.info('Ok. Version is sufficient but there is a new version?')
 			# FIXME update the vplan client?
-			pass
 		elif code == '402':
 			# uhhh we have a version mismatch!
 			log.critical('Version mismatch - you need at least "%s"' % (msg,))
@@ -435,7 +462,7 @@ class DsbServer(QThread):
 				self.flsConfig.loadJson(msg.value)
 				self.flsConfig.save()
 				log.info('New fls configuration set.')
-		except ValueError as e:
+		except ValueError:
 			log.error('Got wrong configuration string!')
 
 	def evtGetState(self, msg):
@@ -562,8 +589,8 @@ class DsbServer(QThread):
 		except queue.Empty:
 			log.debug('output queue is empty.')
 		else:
+			log.debug('sending data: %s' % (nextMsg,))
 			nextMsg += '\n'
-			log.debug('sending data')
 			self.sock.send(nextMsg.encode('utf-8'))
 
 	def shutdown(self):
@@ -735,7 +762,7 @@ class VPlan(QObject):
 			'classn': 0,
 			'hour': 0,
 			'original': 0,
-			'change': 0			
+			'change': 0
 		}
 		self.triggerPresenter = False
 
@@ -744,7 +771,7 @@ class VPlan(QObject):
 			'classn': 0,
 			'hour': 0,
 			'original': 0,
-			'change': 0			
+			'change': 0
 		}
 		fieldFactor = {
 			'classn': 0,
@@ -754,8 +781,6 @@ class VPlan(QObject):
 		}
 		planT = {}
 		
-		didx = 0
-		pidx = 0
 		if len(data) > 0:
 			for day in data['times']:
 				dt = datetime.datetime.fromtimestamp(day)
@@ -764,7 +789,10 @@ class VPlan(QObject):
 					planT[str(day)] = newDay
 
 				for entry in data['changes'][str(day)]:
-					newEntry = PlanEntry(day, entry['startTime'], entry['endTime'], entry['raw']['class'], entry['raw']['hour'], entry['uuid'], entry['raw']['what'], entry['raw']['change'])
+					newEntry = PlanEntry(
+						day, entry['startTime'], entry['endTime'], entry['raw']['class'], 
+						entry['raw']['hour'], entry['uuid'], entry['raw']['what'], entry['raw']['change']
+					)
 					tmpLen = len(entry['raw']['class'])
 					if tmpLen > maxFieldLengths['classn']: 
 						maxFieldLengths['classn'] = tmpLen
@@ -850,6 +878,11 @@ class VPlan(QObject):
 
 	def getNextEntries(self, maxEntries, filterElapsed, now, bufferTime):
 		log.debug('VPlan::getNextEntries -> called.')
+		
+		# do we have any data??
+		if len(self.plan) == 0:
+			return []
+			
 		# check and set next day if neccessary.
 		if self.currentDay is None \
 			or self.currentDay not in list(self.plan.keys()) \
@@ -910,7 +943,6 @@ class EbbPlanHandler(QObject):
 		global flsConfig
 		self.ebbConfig = globConfig
 		self.flsConfig = flsConfig
-		self.ready = False
 		self.maxEntries = 0
 		self.vplanInterval = 4
 		self.newsInterval = 7
@@ -923,16 +955,16 @@ class EbbPlanHandler(QObject):
 		self.ebbConfig = config
 		self.ebbConfigLoaded.emit()
 		if self.ebbConfig.getint('appearance', 'plan_cycle_time') != self.vplanInterval \
-		 or self.ebbConfig.getint('appearance', 'news_cycle_time') != self.newsInterval \
-		 or self.ebbConfig.getint('appearance', 'announcement_cycle_time') != self.annoInterval:
-		 	self.vplanInterval = self.ebbConfig.getint('appearance', 'plan_cycle_time')
-		 	self.newsInterval = self.ebbConfig.getint('appearance', 'news_cycle_time')
-		 	self.annoInterval = self.ebbConfig.getint('appearance', 'announcement_cycle_time')
-		 	self.timerChange.emit(
-		 		QVariant(self.vplanInterval*1000), 
-		 		QVariant(self.newsInterval*1000), 
-		 		QVariant(self.annoInterval*1000)
-	 		)
+			or self.ebbConfig.getint('appearance', 'news_cycle_time') != self.newsInterval \
+			or self.ebbConfig.getint('appearance', 'announcement_cycle_time') != self.annoInterval:
+			self.vplanInterval = self.ebbConfig.getint('appearance', 'plan_cycle_time')
+			self.newsInterval = self.ebbConfig.getint('appearance', 'news_cycle_time')
+			self.annoInterval = self.ebbConfig.getint('appearance', 'announcement_cycle_time')
+			self.timerChange.emit(
+				QVariant(self.vplanInterval*1000), 
+				QVariant(self.newsInterval*1000), 
+				QVariant(self.annoInterval*1000)
+			)
 
 	def setFlsConfig(self, config):
 		self.flsConfig = config
@@ -941,16 +973,6 @@ class EbbPlanHandler(QObject):
 	@pyqtSlot(int)
 	def setMaxEntries(self, no):
 		self.maxEntries = no
-
-	@pyqtSlot()
-	def ready(self):
-		log.info('js is ready now!')
-		self.ready = True
-
-	@pyqtSlot()
-	def notReady(self):
-		log.info('js is not ready anymore!')
-		self.ready = False
 
 	@pyqtSlot()
 	def reload(self):
@@ -1154,7 +1176,8 @@ class VPlanMainWindow(QQuickView):
 	sysTermSignal = pyqtSignal()
 
 	def __init__(self, app):
-		QtWidgets.QMainWindow.__init__(self)
+		QQuickView.__init__(self)
+
 		global flsConfig
 		global globConfig
 		self._notifyReceiver = NotifyReceiver(self)
@@ -1181,7 +1204,7 @@ class VPlanMainWindow(QQuickView):
 		self.setSource(QUrl(os.path.join(workDir, 'ui', 'main.qml')))
 		self.setResizeMode(QQuickView.SizeRootObjectToView)
 
-		rootContext = self.rootContext()
+		#rootContext = self.rootContext()
 		rootObject = self.rootObject()
 		self.ebbPlanHandler = rootObject.findChild(EbbPlanHandler, 'ebbPlanHandler')
 		self.ebbPlanHandler.setEbbConfig(self.config)
@@ -1261,7 +1284,7 @@ class VPlanMainWindow(QQuickView):
 				self.scrShotTimer.start()
 			del timerActive
 			if self.config.getboolean('appearance', 'filter_elapsed_hour') \
-			 or self.config.getboolean('appearance', 'filter_tomorrow'):
+				or self.config.getboolean('appearance', 'filter_tomorrow'):
 				self.elapsedHourTimer.stop()
 				self.calculateNextHourTimer()
 
@@ -1324,15 +1347,15 @@ class VPlanMainWindow(QQuickView):
 		# remove elapsed hour hook...
 		self.elapsedHourTimer.timeout.connect(self.elapsedHourTimerHook)
 	
-	@pyqtSlot(QNetworkReply, QAuthenticator)
+	@pyqtSlot('QNetworkReply*', 'QAuthenticator*')
 	def setBasicAuth(self, reply, auth):
-		self.numTry += 1
+		#self.numTry += 1
 
-		if self.numTry > 2:
+		if False: # and self.numTry > 2:
 			log.warning('Authentication required but max number of tries are exceeded.')
 			reply.abort()
 		else:
-			log.info('Authentication required (Try #%i). Use data from config.' % (self.numTry,))
+			log.info('Authentication required. Use data from config.')
 			# on first
 			auth.setUser(self.config.get('connection', 'username'))
 			auth.setPassword(self.config.get('connection', 'password'))
@@ -1348,7 +1371,7 @@ class VPlanMainWindow(QQuickView):
 
 	def calculateNextHourTimer(self):
 		if not self.config.getboolean('appearance', 'filter_elapsed_hour') \
-		 and not self.config.getboolean('appearance', 'filter_tomorrow'):
+			and not self.config.getboolean('appearance', 'filter_tomorrow'):
 			return
 
 		now = datetime.datetime.now()
@@ -1669,7 +1692,7 @@ class VPlanMainWindow(QQuickView):
 		sts = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
 
 		# get the date from server.
-		date = reply.rawHeader(QByteArray.fromRawData('Date'.encode('utf-8'))).data().decode('utf-8')
+		#date = reply.rawHeader(QByteArray.fromRawData('Date'.encode('utf-8'))).data().decode('utf-8')
 		# process only if it is a PDF / PS!
 		contentType = reply.rawHeader(QByteArray.fromRawData('Content-Type'.encode('utf-8'))).data().decode('utf-8')
 		contentType = (contentType.split(';')[0]).strip().lower()
@@ -1747,7 +1770,6 @@ class ContentImageFinder(HTMLParser):
 
 	def handle_starttag(self, tag, attrs):
 		if len(self.image) > 0:
-			pass
 			return
 
 		if tag == 'img':
@@ -1762,9 +1784,9 @@ def processTermSignal(signum, frame):
 	ds.sysTermSignal.emit()
 
 if __name__ == "__main__":
-	hdlr = WatchedFileHandler('vclient.log')
-	hdlr.setFormatter(formatter)
-	log.addHandler(hdlr)
+	hdwf = WatchedFileHandler('vclient.log')
+	hdwf.setFormatter(formatter)
+	log.addHandler(hdwf)
 	log.setLevel(logging.DEBUG)
 
 	log.debug('Main PID: %i' % (os.getpid(),))
@@ -1774,6 +1796,7 @@ if __name__ == "__main__":
 	subprocess.call(shlex.split('xset dpms 0 0 0'))
 
 	app = QtWidgets.QApplication(sys.argv)
+	QtCore.qInstallMessageHandler(qt_message_handler)
 	qmlRegisterType(EbbPlanHandler, 'EbbPlanHandler', 1, 0, 'EbbPlanHandler')
 	qmlRegisterType(EbbContentHandler, 'EbbContentHandler', 1, 0, 'EbbContentHandler')
 	ds = VPlanMainWindow(app)
