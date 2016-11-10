@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # vim: fenc=utf-8:ts=4:sw=4:si:sta:noet
+import os
+if 'ebbglfix' in os.environ.keys():
+	from OpenGL import GL
 from OpenSSL import SSL
 from html.parser import HTMLParser
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot, pyqtProperty, QBuffer, QByteArray, QIODevice
@@ -20,7 +23,7 @@ from logging.handlers import WatchedFileHandler
 from urllib.request import URLopener
 from urllib.parse import urlencode, urljoin
 from operator import attrgetter
-import sys, os, socket, select, uuid, signal, queue, random, logging, json, shlex
+import sys, socket, select, uuid, signal, queue, random, logging, json, shlex
 import base64, subprocess, datetime
 import popplerqt5, shutil, math
 
