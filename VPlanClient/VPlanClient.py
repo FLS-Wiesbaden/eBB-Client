@@ -654,7 +654,6 @@ class PlanEntry:
 		# The handling is different to the javascript solution. We minimize the effort, this software is there to run in
 		# fullscreen on a window so we ignore resizing operations, etc. We have a couple number of entries which we
 		# can show and based on this we pre-generate the pages. 
-		
 		return {'classn': self.className, 'hour': self.hour, 'original': self.original, 'change': self.change}
 
 class PlanDay:
@@ -1394,7 +1393,7 @@ class VPlanMainWindow(QQuickView):
 		# Decide what is nearer (next regular or our filter_tomorrow end).
 		if destination is None and tomorrow is None:
 			return
-		elif destination is None or tomorrow < destination:
+		elif (destination is None and tomorrow is not None) or tomorrow < destination:
 			destination = tomorrow
 
 		# set and start the timer
