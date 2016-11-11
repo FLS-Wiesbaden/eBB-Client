@@ -1393,7 +1393,7 @@ class VPlanMainWindow(QQuickView):
 		# Decide what is nearer (next regular or our filter_tomorrow end).
 		if destination is None and tomorrow is None:
 			return
-		elif (destination is None and tomorrow is not None) or tomorrow < destination:
+		elif tomorrow is not None and (destination is None or tomorrow < destination):
 			destination = tomorrow
 
 		# set and start the timer
