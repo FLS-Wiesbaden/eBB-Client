@@ -14,6 +14,8 @@ StackView {
 	property FirealarmPage pFirealarm: null
 	property bool contentReady: false
 	property var currentMode: 'default'
+	property var designHeaderImageCenter: "../../res/img/header_center.png"
+	property var designHeaderImageFiller: "../../res/img/header_wdh.png"
 
 	signal continuePlan()
 	signal stopPlan()
@@ -56,6 +58,7 @@ StackView {
 					pPdf.setLoop(true)
 				} else {
 					pContent = stackView.push(Qt.resolvedUrl('pages/ContentPage.qml'))
+					pContent.setDesignPictures(designHeaderImageFiller, designHeaderImageCenter)
 					pContent.updateArrow(ebbContentHandler.contentArrowDirection)
 					pContent.updateContent(ebbContentHandler.contentArrow, ebbContentHandler.contentText)
 				}
@@ -86,6 +89,14 @@ StackView {
 		onFireArrowChanged: {
 			if (currentMode == 'firealarm') {
 				pFirealarm.updateArrow(newDirection)
+			}
+		}
+
+		onLoadDesignPictures: {
+			designHeaderImageCenter = headerCenterUrl
+			designHeaderImageFiller = headerRptUrl
+			if (pContent != null) {
+				pContent.setDesignPictures(designHeaderImageFiller, designHeaderImageCenter)
 			}
 		}
 	}

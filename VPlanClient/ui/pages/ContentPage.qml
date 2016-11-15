@@ -202,4 +202,10 @@ Item {
 		contentText.text = content
 		contentArrow.visible = arrow
     }
+
+    function setDesignPictures(designHeaderImageFiller, designHeaderImageCenter) {
+    	ebbHeadImgMiddle.source = designHeaderImageCenter
+    	ebbHeadImgLeft.source = designHeaderImageFiller
+    	ebbHeadImgRight.source = designHeaderImageFiller
+    }
 }

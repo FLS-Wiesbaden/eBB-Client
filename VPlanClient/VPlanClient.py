@@ -1023,7 +1023,11 @@ class EbbPlanHandler(QObject):
 		filterElapsed = self.ebbConfig.getboolean('appearance', 'filter_elapsed_hour')
 		now = datetime.datetime.now()
 		if self.ebbConfig.getboolean('debug', 'enabled'):
-			now = datetime.datetime.strptime(self.ebbConfig.get('debug', 'date'), '%d.%m.%Y %H:%M')
+			try:
+				now = datetime.datetime.strptime(self.ebbConfig.get('debug', 'date'), '%d.%m.%Y %H:%M')
+			except ValueError:
+				log.error('Debug mode is enabled, but actually invalid date is given: %s' % (self.ebbConfig.get('debug', 'date'),))
+
 		bufferTime = 0
 		if filterElapsed:
 			bufferTime = self.ebbConfig.getint('appearance', 'filter_elapsed_hour_buffer')
@@ -1044,7 +1048,11 @@ class EbbPlanHandler(QObject):
 		filterElapsed = self.ebbConfig.getboolean('appearance', 'filter_elapsed_hour')
 		now = datetime.datetime.now()
 		if self.ebbConfig.getboolean('debug', 'enabled'):
-			now = datetime.datetime.strptime(self.ebbConfig.get('debug', 'date'), '%d.%m.%Y %H:%M')
+			try:
+				now = datetime.datetime.strptime(self.ebbConfig.get('debug', 'date'), '%d.%m.%Y %H:%M')
+			except ValueError:
+				log.error('Debug mode is enabled, but actually invalid date is given: %s' % (self.ebbConfig.get('debug', 'date'),))
+
 		bufferTime = 0
 		if filterElapsed:
 			bufferTime = self.ebbConfig.getint('appearance', 'filter_elapsed_hour_buffer')
@@ -1092,6 +1100,8 @@ class EbbContentHandler(QObject):
 	connected = pyqtSignal()
 	suspendTv = pyqtSignal()
 	resumeTv = pyqtSignal()
+	# Signal about new design images loaded.
+	loadDesignPictures = pyqtSignal([QUrl, QUrl], arguments=['headerCenterUrl', 'headerRptUrl'])
 	# presenter
 	contentAssigned = pyqtSignal()
 	contentDeassigned = pyqtSignal()
@@ -1467,7 +1477,7 @@ class VPlanMainWindow(QQuickView):
 		# FIXME: we need to handle it by ourself!
 		if msg.action == DsbMessage.ACTION_NEWS:
 			news = msg.value
-			if msg.event == DsbMessage.EVENT_CREATE:
+			if msg.event == DsbMessage.EVENT_CREATE and news is not None:
 				# extract image if there is an image.
 				parser = ContentImageFinder()
 				parser.feed(news['text'])
@@ -1477,8 +1487,9 @@ class VPlanMainWindow(QQuickView):
 				else:
 					imgUrl = ''
 				news['imgUrl'] = imgUrl
+				print(msg)
 				self.ebbPlanHandler.newsAdded.emit(QVariant(news))
-			elif msg.event == DsbMessage.EVENT_CHANGE:
+			elif msg.event == DsbMessage.EVENT_CHANGE and news is not None:
 				# extract image if there is an image.
 				parser = ContentImageFinder()
 				parser.feed(news['text'])
@@ -1595,6 +1606,7 @@ class VPlanMainWindow(QQuickView):
 		headerCenterUrl = self.server.baseUrl + 'res/ebb/header_center.png'
 		headerRptUrl = self.server.baseUrl + 'res/ebb/header_wdh.png'
 		self.ebbPlanHandler.loadDesignPictures.emit(QUrl(headerCenterUrl), QUrl(headerRptUrl))
+		self.ebbContentHandler.loadDesignPictures.emit(QUrl(headerCenterUrl), QUrl(headerRptUrl))
 
 	@pyqtSlot(QNetworkReply)
 	def dataLoadFinished(self, reply):
