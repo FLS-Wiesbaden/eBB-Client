@@ -109,7 +109,7 @@ Column {
 			var newsTmp = null
 			while (idx < newsListModel.count && foundIdx < 0) {
 				newsTmp = newsListModel.get(idx)
-				if (newsTmp.nid == newsId) {
+				if (newsTmp.nid == news.id) {
 					foundIdx = idx
 					break
 				}
@@ -372,6 +372,7 @@ Column {
 							Image {
 								id: annoIcon1
 								source: ""
+								asynchronous: true
 								height: 110
 								anchors.leftMargin: 20
 								anchors.verticalCenter: parent.verticalCenter
@@ -438,6 +439,7 @@ Column {
 							Image {
 								id: annoIcon2
 								source: ""
+								asynchronous: true
 								height: 110
 								anchors.leftMargin: 20
 								anchors.verticalCenter: parent.verticalCenter
@@ -571,6 +573,7 @@ Column {
 					Image {
 						id: newsIcon1
 						source: ""
+						asynchronous: true
 						height: 110
 						anchors.leftMargin: 20
 						anchors.verticalCenter: parent.verticalCenter
@@ -637,6 +640,7 @@ Column {
 					Image {
 						id: newsIcon2
 						source: ""
+						asynchronous: true
 						height: 110
 						anchors.leftMargin: 20
 						anchors.verticalCenter: parent.verticalCenter

@@ -1487,7 +1487,6 @@ class VPlanMainWindow(QQuickView):
 				else:
 					imgUrl = ''
 				news['imgUrl'] = imgUrl
-				print(msg)
 				self.ebbPlanHandler.newsAdded.emit(QVariant(news))
 			elif msg.event == DsbMessage.EVENT_CHANGE and news is not None:
 				# extract image if there is an image.
