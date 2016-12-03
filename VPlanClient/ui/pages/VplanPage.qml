@@ -28,6 +28,7 @@ Column {
 	property var aDayList: []
 	property var aPlanList: []
 	property bool presenterPageAvailable: false
+	property bool otherPageAvailable: false
 
 	// Plan sizes...
 	property double colClass: 0
@@ -1302,24 +1303,26 @@ Column {
 				dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
 			} else {
 				// Change the next page..
-				if (activModel == 0) {
-					gridVplan2.model = vplanModelTemp
-					activModel = 1
-				} else {
-					gridVplan.model = vplanModel
-					activModel = 0
-				}
+				if (otherPageAvailable) {
+					if (activModel == 0) {
+						gridVplan2.model = vplanModelTemp
+						activModel = 1
+					} else {
+						gridVplan.model = vplanModel
+						activModel = 0
+					}
 
-				reloadListModels()
-				dayPageListModel.clear()
-				for (var i = 0; i < aDayList[aDayIdx]['pages']; i++) {
-					dayPageListModel.append({'index': i, 'day': aDayList[aDayIdx]['day']})
+					reloadListModels()
+					dayPageListModel.clear()
+					for (var i = 0; i < aDayList[aDayIdx]['pages']; i++) {
+						dayPageListModel.append({'index': i, 'day': aDayList[aDayIdx]['day']})
+					}
+					
+					// Set the current day!
+					dayListView.currentIndex = aDayList[aDayIdx]['index']
+					dayPageList.currentIndex = ebbPlanHandler.getPageNo
+					dayNameLabel.text = aDayList[aDayIdx]['txt']
 				}
-				
-				// Set the current day!
-				dayListView.currentIndex = aDayList[aDayIdx]['index']
-				dayPageList.currentIndex = ebbPlanHandler.getPageNo
-				dayNameLabel.text = aDayList[aDayIdx]['txt']
 			}
 		}
 
@@ -1335,28 +1338,32 @@ Column {
 		aMaxEntries = Math.round((vplanContentContainer.height / gridVplan.cellHeight)*2)
 
 		// Now prepare the next page.
-		if (activModel == 0) {
-			vplanModelTemp.clear()
-		} else {
-			vplanModel.clear()
-		}
-
 		aPlanList = ebbPlanHandler.getNextPlan
-		for (var i = 0; i < aPlanList.length; i++) {
+		if (aPlanList !== false) {
 			if (activModel == 0) {
-				vplanModelTemp.append(aPlanList[i]);
+				vplanModelTemp.clear()
 			} else {
-				vplanModel.append(aPlanList[i]);
+				vplanModel.clear()
 			}
-		}
+			otherPageAvailable = true
+			for (var i = 0; i < aPlanList.length; i++) {
+				if (activModel == 0) {
+					vplanModelTemp.append(aPlanList[i]);
+				} else {
+					vplanModel.append(aPlanList[i]);
+				}
+			}
 
-		aMissingEntries = aMaxEntries - aPlanList.length
-		for (var i = 0; i <= aMissingEntries; i++) {
-			if (activModel == 0) {
-				vplanModelTemp.append({"classn": "", "hour": "", "original": "", "change": ""})
-			} else {
-				vplanModel.append({"classn": "", "hour": "", "original": "", "change": ""})
+			aMissingEntries = aMaxEntries - aPlanList.length
+			for (var i = 0; i <= aMissingEntries; i++) {
+				if (activModel == 0) {
+					vplanModelTemp.append({"classn": "", "hour": "", "original": "", "change": ""})
+				} else {
+					vplanModel.append({"classn": "", "hour": "", "original": "", "change": ""})
+				}
 			}
+		} else {
+			otherPageAvailable = false
 		}
 
 	}

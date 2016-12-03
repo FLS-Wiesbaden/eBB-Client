@@ -764,7 +764,16 @@ class VPlan(QObject):
 			'original': 0,
 			'change': 0
 		}
+		self.contentAssigned = False
 		self.triggerPresenter = False
+
+	@pyqtSlot()
+	def onContentAssigned(self):
+		self.contentAssigned = True
+
+	@pyqtSlot()
+	def onContentDeassigned(self):
+		self.contentAssigned = False
 
 	def loadPlan(self, data):
 		maxFieldLengths = {
@@ -832,6 +841,38 @@ class VPlan(QObject):
 	def getStand(self):
 		return self.stand
 
+	def hasNextDay(self, filterElapsed, now, bufferTime):
+		times = list(self.plan.keys())
+		times.sort()
+		idx = 0
+		for f in times:
+			if not self.plan[f].isRelevant(filterElapsed, now, bufferTime):
+				times.remove(f)
+		times = list(self.plan.keys())
+		times.sort()
+
+		# no day selectable.
+		if len(times) == 0:
+			return False
+
+		# already a current day?
+		idx = -1
+		if self.currentDay is not None:
+			try:
+				idx = times.index(self.currentDay)
+			except ValueError:
+				pass
+
+		# ok.. next day?
+		idx += 1
+		if idx < len(times):
+			return True
+		else:
+			if not self.triggerPresenter and self.contentAssigned or len(times) > 1:
+				return True
+			else:
+				return False
+
 	def setNextDay(self, filterElapsed, now, bufferTime):
 		times = list(self.plan.keys())
 		times.sort()
@@ -862,7 +903,7 @@ class VPlan(QObject):
 		if idx < len(times):
 			d = times[idx]
 		else:
-			if not self.triggerPresenter:
+			if not self.triggerPresenter and self.contentAssigned:
 				log.debug('We\'re add the end of the list. So trigger presenter next call.')
 				self.triggerPresenter = True
 				return self.currentDay
@@ -887,11 +928,23 @@ class VPlan(QObject):
 		if self.currentDay is None \
 			or self.currentDay not in list(self.plan.keys()) \
 			or not self.plan[self.currentDay].hasRemainingEntries(filterElapsed, now, bufferTime):
-			self.setNextDay(filterElapsed, now, bufferTime)
-			log.debug('VPlan::getNextEntries -> nextDay was called.')
-			if self.triggerPresenter:
+			log.debug('VPlan::getNextEntries -> nextDay must be triggered?')
+			hasNextDay = self.hasNextDay(filterElapsed, now, bufferTime)
+			if hasNextDay:
+				self.setNextDay(filterElapsed, now, bufferTime)
+				log.debug('VPlan::getNextEntries -> nextDay triggered!')
+			elif self.currentDay is not None and self.currentDay in list(self.plan.keys()):
+				if self.plan[self.currentDay].numPages() > 1:
+					self.setNextDay(filterElapsed, now, bufferTime)
+					log.debug('VPlan::getNextEntries -> nextDay triggered!')
+
+			if self.triggerPresenter and self.contentAssigned:
 				log.debug('VPlan::getNextEntries: Presenter will be active!')
 				return []
+			elif not hasNextDay:
+				log.debug('VPlan::getNextEntries: There is no second day!')
+				if self.plan[self.currentDay].numPages() <= 1:
+					return False
 			# could not select an entry
 			if self.currentDay is None:
 				return []
@@ -1184,6 +1237,8 @@ class VPlanMainWindow(QQuickView):
 	sigSndScrShot = pyqtSignal(QtGui.QPixmap)
 	sigSendState = pyqtSignal(QVariant)
 	sysTermSignal = pyqtSignal()
+	contentAssigned = pyqtSignal()
+	contentDeassigned = pyqtSignal()
 
 	def __init__(self, app):
 		QQuickView.__init__(self)
@@ -1356,6 +1411,9 @@ class VPlanMainWindow(QQuickView):
 		self.dayChangeTimer.timeout.connect(self.dayChangeTimerHook)
 		# remove elapsed hour hook...
 		self.elapsedHourTimer.timeout.connect(self.elapsedHourTimerHook)
+		# signal for the VPlan handle
+		self.contentAssigned.connect(self.ebbPlanHandler.plan.onContentAssigned)
+		self.contentDeassigned.connect(self.ebbPlanHandler.plan.onContentDeassigned)
 	
 	@pyqtSlot('QNetworkReply*', 'QAuthenticator*')
 	def setBasicAuth(self, reply, auth):
@@ -1522,10 +1580,12 @@ class VPlanMainWindow(QQuickView):
 			if msg.event == DsbMessage.EVENT_DELETE:
 				# by default nothing here.
 				self.ebbContentHandler.contentDeassigned.emit()
+				self.contentDeassigned.emit()
 			else:
 				dataContent = msg.value
 				# by default nothing here.
 				self.ebbContentHandler.contentDeassigned.emit()
+				self.contentDeassigned.emit()
 				if dataContent is not None and type(dataContent).__name__ == 'dict' \
 					and len(dataContent['pdfUrl']) > 0:
 					# yes there is something defined.
@@ -1533,6 +1593,7 @@ class VPlanMainWindow(QQuickView):
 					self.checkRequestContentPdf(dataContent['pdfUrl'])
 				else:
 					self.ebbContentHandler.contentDeassigned.emit()
+					self.contentDeassigned.emit()
 					if dataContent is not None \
 						and type(dataContent).__name__ == 'dict' and \
 						( self.ebbContentHandler.contentBody != dataContent['content'] \
@@ -1666,6 +1727,7 @@ class VPlanMainWindow(QQuickView):
 			# }
 			# by default nothing here.
 			self.ebbContentHandler.contentDeassigned.emit()
+			self.contentDeassigned.emit()
 			if type(dataContent).__name__ != 'dict':
 				dataContent = None
 			if dataContent is not None and len(dataContent['pdfUrl']) > 0:
@@ -1674,6 +1736,7 @@ class VPlanMainWindow(QQuickView):
 				self.checkRequestContentPdf(dataContent['pdfUrl'])
 			else:
 				self.ebbContentHandler.contentDeassigned.emit()
+				self.contentDeassigned.emit()
 				if dataContent is not None and \
 				( self.ebbContentHandler.contentBody != dataContent['content'] \
 					or self.ebbContentHandler._contentArrow != dataContent['arrow']):
@@ -1738,6 +1801,7 @@ class VPlanMainWindow(QQuickView):
 			log.error('Could not convert the pdf document %s' % (os.path.join(baseDir, baseName),))
 		else:
 			self.ebbContentHandler.contentDeassigned.emit()
+			self.contentDeassigned.emit()
 			pageCounter = 0
 			p = 0
 			while p < len(doc):
@@ -1752,17 +1816,20 @@ class VPlanMainWindow(QQuickView):
 				p += 1
 
 			self.ebbContentHandler.contentAssigned.emit()
+			self.contentAssigned.emit()
 
 	def loadContentPages(self, baseDir):
 		# retrieve all files of that folder.
 		relevantFiles = [ f for f in os.listdir(baseDir) if f.endswith('.jpg') ]
 
 		self.ebbContentHandler.contentDeassigned.emit()
+		self.contentDeassigned.emit()
 		for f in relevantFiles:
 			self.ebbContentHandler.pageAdded.emit(QVariant(os.path.abspath(os.path.join(baseDir, f))))
 
 		if len(relevantFiles) > 0:
 			self.ebbContentHandler.contentAssigned.emit()
+			self.contentAssigned.emit()
 
 	def parseNewPlanData(self, data):
 		log.info('Got a new plan. Parse it now.')
