@@ -350,7 +350,11 @@ class DsbServer(QThread):
 			urls = json.loads(msg)
 			self.baseUrl = urls['base']
 			self.scrShotUrl = urls['screenshot']
-			self.loadPlanUrl = urls['plan'] + '?raw=1&clientId=' + self.getMachineID()
+			self.loadPlanUrl = '%s?raw=1&clientId=%s&planMode=%s' % (
+				urls['plan'], 
+				self.getMachineID(), 
+				self.config.get('app', 'type')
+			)
 			self.loadNewsUrl = urls['news'] + '?raw=1&clientId=' + self.getMachineID()
 			self.loadAnnouncementUrl = urls['announcement'] + '?raw=1&clientId=' + self.getMachineID()
 			self.loadContentUrl = urls['content'] + '?raw=1&clientId=' + self.getMachineID()
