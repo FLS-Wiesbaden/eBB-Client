@@ -23,7 +23,7 @@ from logging.handlers import WatchedFileHandler
 from urllib.request import URLopener
 from urllib.parse import urlencode, urljoin
 from operator import attrgetter
-import sys, socket, select, uuid, signal, queue, random, logging, json, shlex
+import sys, socket, select, uuid, signal, queue, random, logging, json, shlex, re
 import base64, subprocess, datetime
 import popplerqt5, shutil, math
 
@@ -353,7 +353,7 @@ class DsbServer(QThread):
 			self.loadPlanUrl = '%s?raw=1&clientId=%s&planMode=%s' % (
 				urls['plan'], 
 				self.getMachineID(), 
-				self.config.get('app', 'type')
+				self.config.get('app', 'type') if self.config.has_option('app', 'type') else 'pupil'
 			)
 			self.loadNewsUrl = urls['news'] + '?raw=1&clientId=' + self.getMachineID()
 			self.loadAnnouncementUrl = urls['announcement'] + '?raw=1&clientId=' + self.getMachineID()
@@ -1176,11 +1176,15 @@ class EbbContentHandler(QObject):
 		global flsConfig
 		self.ebbConfig = globConfig
 		self.flsConfig = flsConfig
+		self.server = None
 		self.prevContentArrow = 0
 		self.prevFireArrow = 0
 		self.currentMode = 'default'
 		self.contentBody = ''
+		self.compiledContentBody = ''
 		self._contentArrow = False
+
+		self.imgPattern = re.compile('<(img)( ?[-a-zA-Z0-9]+="(.*)" ?)* ?(/|</img)>')
 
 	def setEbbConfig(self, config):
 		self.ebbConfig = config
@@ -1199,6 +1203,9 @@ class EbbContentHandler(QObject):
 		self.flsConfig = config
 		self.flsConfigLoaded.emit()
 
+	def setServer(self, srv):
+		self.server = srv
+
 	def _config(self):
 		return self.ebbConfig.toJson()
 
@@ -1211,8 +1218,43 @@ class EbbContentHandler(QObject):
 	def _contentArrowDirection(self):
 		return self.ebbConfig.getfloat('appearance', 'content_direction')
 
+	def setContentBody(self, cb):
+		self.contentBody = cb
+		# now "compile" it. We need to replace the image urls and prepend the base URL.
+		self.compiledContentBody = ''
+		pos = 0
+		lastPos = 0
+		while pos < len(self.contentBody):
+			res = self.imgPattern.search(self.contentBody, pos=pos)
+			# nothing found? Finished!
+			if res is None:
+				if lastPos < len(self.contentBody):
+					self.compiledContentBody += self.contentBody[lastPos:]
+				break
+			else:
+				self.compiledContentBody += self.contentBody[lastPos:res.start()]
+				lastPos = res.end()
+				# replace the image source if necessary and append it to the compiled content
+				# the group with the img src is always in the second one!
+				attributes = res.group(2)
+				srcPos = attributes.find('src="')
+				if srcPos < 0 or attributes[srcPos + 5:].startswith('http://') or \
+					attributes[srcPos + 5:].startswith('https://'):
+					self.compiledContentBody += self.contentBody[res.start() + 1:res.end()]
+				else:
+					imgSrc = '<' + res.group(1)
+					imgSrc += attributes[:srcPos + 5]
+					imgSrc += self.server.baseUrl if self.server is not None else ''
+					imgSrc += attributes[srcPos + 5:]
+					if len(res.groups()) > 3:
+						imgSrc += res.group(4)
+					imgSrc += '>'
+					self.compiledContentBody += imgSrc
+				pos = res.end() + 1
+
 	def _contentBody(self):
-		return QVariant(self.contentBody)
+		# always prepend the base tag.
+		return QVariant(self.compiledContentBody)
 
 	def getContentArrow(self):
 		return QVariant(self._contentArrow)
@@ -1281,6 +1323,7 @@ class VPlanMainWindow(QQuickView):
 		self.ebbContentHandler = rootObject.findChild(EbbContentHandler, 'ebbContentHandler')
 		self.ebbContentHandler.setEbbConfig(self.config)
 		self.ebbContentHandler.setFlsConfig(self.flsConfig)
+		self.ebbContentHandler.setServer(self.server)
 
 		self.manager = QNetworkAccessManager()
 		self.manager.finished.connect(self.dataLoadFinished)
@@ -1308,6 +1351,7 @@ class VPlanMainWindow(QQuickView):
 		self.server.connected.connect(self.ebbPlanHandler.onConnected)
 		self.server.disconnected.connect(self.ebbPlanHandler.onDisconnected)
 		self.server.connected.connect(self.ebbContentHandler.onConnected)
+		self.ebbContentHandler.setServer(self.server)
 
 		self.server.start()
 
@@ -1602,7 +1646,7 @@ class VPlanMainWindow(QQuickView):
 						and type(dataContent).__name__ == 'dict' and \
 						( self.ebbContentHandler.contentBody != dataContent['content'] \
 							or self.ebbContentHandler._contentArrow != dataContent['arrow']):
-						self.ebbContentHandler.contentBody = dataContent['content']
+						self.ebbContentHandler.setContentBody(dataContent['content'])
 						self.ebbContentHandler._contentArrow = dataContent['arrow']
 						self.ebbContentHandler.contentBodyChanged.emit()
 		elif msg.action == DsbMessage.ACTION_MODE:
@@ -1744,7 +1788,7 @@ class VPlanMainWindow(QQuickView):
 				if dataContent is not None and \
 				( self.ebbContentHandler.contentBody != dataContent['content'] \
 					or self.ebbContentHandler._contentArrow != dataContent['arrow']):
-					self.ebbContentHandler.contentBody = dataContent['content']
+					self.ebbContentHandler.setContentBody(dataContent['content'])
 					self.ebbContentHandler._contentArrow = dataContent['arrow']
 					self.ebbContentHandler.contentBodyChanged.emit()
 

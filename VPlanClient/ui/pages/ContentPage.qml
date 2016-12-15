@@ -165,6 +165,7 @@ Item {
 					width: parent.width - 40
 					color: "#000000"
 					text: ""
+					textFormat: Text.RichText
 					anchors.verticalCenterOffset: 0
 					anchors.horizontalCenterOffset: 40
 					wrapMode: Text.WordWrap
