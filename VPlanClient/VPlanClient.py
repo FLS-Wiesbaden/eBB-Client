@@ -1570,10 +1570,12 @@ class VPlanMainWindow(QQuickView):
 			log.debug('Create screenshot')
 			screen = self.screen()
 			if screen:
+				self.ebbPlanHandler.suspendTv.emit()
 				scrShot = screen.grabWindow(self.winId())
 				if self.config.getint('options', 'scrShotSize') > 0:
 					scrShot = scrShot.scaledToWidth(self.config.getint('options', 'scrShotSize'))
-				self.sigSndScrShot.emit(scrShot)
+					self.sigSndScrShot.emit(scrShot)
+				self.ebbPlanHandler.resumeTv.emit()
 		else:
 			log.debug('Screenshot canceled (runState: %s ; Visible: %s).' % (self.server.runState, self.isVisible()))
 

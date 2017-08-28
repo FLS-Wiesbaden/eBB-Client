@@ -1,4 +1,4 @@
 pyopenssl
 sip >= 4.16.2
-PyQt5 >= 5.4.1
+PyQt5 >= 5.7
 popplerqt5

@@ -1,8 +1,9 @@
 import QtQuick 2.4
 import QtGraphicalEffects 1.0
-import QtQuick.Controls 1.3
+import QtQuick.Controls 2.0
 import QtQuick.Window 2.2
 import EbbPlanHandler 1.0
+import "../../js/vPlanScripts.js" as VPlanScripts
 
 Column {
 	id: ebbContainer
@@ -14,11 +15,7 @@ Column {
 
 	property int aCurIdx: -1
 	property int aDayIdx: -1
-	property int aPageIdx: -1
-	property int aNewsIdx: -1
-	property bool aFirstNews: false
-	property int aAnnoIdx: -1
-	property bool aFirstAnno: false
+    property int aPageIdx: -1
 	property int activModel: 0
 	property int aMaxEntries: 0
 	property int aMissingEntries: 0
@@ -36,6 +33,10 @@ Column {
 	property double colOriginal: 0
 	property double colChange: 0
 
+    /*Component.onCompleted: {
+        VPlanScripts.createDefaultAnnouncement()
+    }*/
+
 	EbbPlanHandler {
 		id: ebbPlanHandler
 		objectName: "ebbPlanHandler"
@@ -43,24 +44,22 @@ Column {
 		onConnected: {
 			console.log('I\'m connected now!')
 			ebbContainer.loadPrimaryData()
-			ebbDayBox.color = "#00000000"
+            VPlanScripts.vplanConnected()
 		}
 		onDisconnected: {
-			ebbDayBox.color = "#DC8A8A"
+            VPlanScripts.vplanDisconnected()
 		}
 		onReset: {
 			aDayList = []
-			aPlanList = []
-			annoListModel.clear()
-			newsListModel.clear()
+            aPlanList = []
+            VPlanScripts.clearAnnouncements()
+            VPlanScripts.clearNews()
 		}
 		onSuspendTv: {
 			console.log('Stopped change timer in SuspendTv')
 			ebbContainer.suspendPlan()
 		}
-		onResumeTv: {
-			aDayIdx = -1
-			aPageIdx = -1
+        onResumeTv: {
 			console.log('Started vplan animation.')
 			ebbContainer.continuePlan()
 		}
@@ -97,11 +96,7 @@ Column {
 		}
 		// Data handlers:
 		onNewsAdded: {
-			newsListModel.append({'nid': news.id, 'subject': news.subject, 'topic': news.topic, 'img': news.imgUrl})
-			if (aNewsIdx < 0) {
-				// Populate the next news immediately!
-				nextNews()
-			}
+            VPlanScripts.createNews(news.id, news.topic, news.subject, news.imgUrl)
 		}
 		onNewsUpdate: {
 			// is the id already in it?
@@ -145,14 +140,7 @@ Column {
 			}
 		}
 		onAnnouncementAdded: {
-			annoListModel.append({
-				'aid': anno.id, 'title': anno.title, 'section': anno.section, 'text': anno.text,
-				'img': '../../res/img/alert.png'
-			})
-			if (aAnnoIdx < 0) {
-				// Populate the next news immediately!
-				nextAnnouncement()
-			}
+            VPlanScripts.createAnnouncement(anno.id, anno.section, anno.text, '../../res/img/alert.png')
 		}
 		onAnnouncementUpdate: {
 			// is the id already in it?
@@ -238,19 +226,45 @@ Column {
 		id: newsTimer
 		interval: 7000
 		repeat: true
-		running: false
-		triggeredOnStart: true
-		onTriggered: ebbContainer.nextNews()
+        running: false
+        triggeredOnStart: false
+        onTriggered: {
+            if (newsNav.count > 1) {
+                if (newsNav.currentIndex < (newsNav.count - 1)) {
+                    newsNav.currentIndex += 1
+                } else {
+                    newsNav.currentIndex = 0
+                }
+            }
+        }
 	}
 
 	Timer {
 		id: annoTimer
 		interval: 4000
 		repeat: true
-		running: false
-		triggeredOnStart: true
-		onTriggered: ebbContainer.nextAnnouncement()
+        running: false
+        triggeredOnStart: false
+        onTriggered: {
+            if (newsNav.count > 1) {
+                if (newsNav.currentIndex < (newsNav.count - 1)) {
+                    newsNav.currentIndex += 1
+                } else {
+                    newsNav.currentIndex = 0
+                }
+            }
+        }
 	}
+
+    Timer {
+        id: annoDefaultRemover
+        interval: 7500
+        repeat: false
+        running: false
+        onTriggered: {
+            announcementView.removeItem(0)
+        }
+    }
 
 	Item {
 		id: ebbHeadContainer
@@ -343,200 +357,34 @@ Column {
 			width: (parent.width / 2) - 1
 			color: '#ffffff'
 			border.color: '#ffffff'
-			z: 15
+            z: 15
 
-			ScrollView {
-				height: parent.height
-				width: parent.width
-				verticalScrollBarPolicy: Qt.ScrollBarAlwaysOff
-				horizontalScrollBarPolicy: Qt.ScrollBarAlwaysOff
+            SwipeView {
+                id: announcementView
+                height: parent.height - annoNav.height
+                width: parent.width
+                currentIndex: annoNav.currentIndex
+                background: Rectangle {
+                    color: "#ffffff"
+                }
+            }
 
-				Flickable {
-					height: parent.height - annoNav.height
-					width: parent.width
-					Rectangle {
-						id: annoContent
-						height: parent.height - annoNav.height
-						width: parent.width
-						color: "#00000000"
-						border.color: "#00000000"
-
-						Rectangle {
-							id: annoContainer1
-							height: parent.height
-							width: parent.width
-							property int idx: -1
-							property string uuid: ''
-							color: "#00000000"
-							border.color: "#00000000"
-
-							Image {
-								id: annoIcon1
-								source: ""
-								asynchronous: true
-								height: 110
-								anchors.leftMargin: 20
-								anchors.verticalCenter: parent.verticalCenter
-								fillMode: Image.PreserveAspectFit
-								anchors.left: parent.left
-							}
-							Text {
-								id: annoText1
-								height: parent.height
-								width: parent.width - annoIcon1.width - 20 - 25
-								anchors.left: annoIcon1.right
-								anchors.leftMargin: 25
-								font.pointSize: 20
-								horizontalAlignment: Text.AlignLeft
-								verticalAlignment: Text.AlignVCenter
-								wrapMode: Text.WordWrap
-								text: ""
-
-								Text {
-									id: annoTopic1
-									width: 168
-									height: 30
-									color: "#999999"
-									text: ""
-									anchors.top: parent.top
-									anchors.topMargin: 19
-									anchors.right: parent.right
-									anchors.rightMargin: 15
-									horizontalAlignment: Text.AlignRight
-									font.pixelSize: 17
-								}
-							}
-
-							Behavior on uuid {
-								ParallelAnimation {
-									NumberAnimation {
-										target: annoContainer2
-										properties: "x"
-										from: annoContent.x
-										to: (annoContent.x - annoContent.width)
-										duration: 500
-									}
-									NumberAnimation {
-										target: annoContainer1
-										properties: "x"
-										from: (annoContent.x + annoContent.width)
-										to: annoContent.x
-										duration: 500
-									}
-								}
-							}
-						}
-						Rectangle {
-							id: annoContainer2
-							height: parent.height
-							width: parent.width
-							x: parent.x + parent.width
-							y: parent.y
-							property int idx: -1
-							property string uuid: ''
-							color: "#00000000"
-							border.color: "#00000000"
-
-							Image {
-								id: annoIcon2
-								source: ""
-								asynchronous: true
-								height: 110
-								anchors.leftMargin: 20
-								anchors.verticalCenter: parent.verticalCenter
-								fillMode: Image.PreserveAspectFit
-								anchors.left: parent.left
-							}
-							Text {
-								id: annoText2
-								height: parent.height
-								width: parent.width - annoIcon2.width - 20 - 25
-								anchors.left: annoIcon2.right
-								anchors.leftMargin: 25
-								font.pointSize: 20
-								horizontalAlignment: Text.AlignLeft
-								verticalAlignment: Text.AlignVCenter
-								wrapMode: Text.WordWrap
-								text: ""
-
-								Text {
-									id: annoTopic2
-									width: 168
-									height: 30
-									color: "#999999"
-									text: ""
-									anchors.top: parent.top
-									anchors.topMargin: 19
-									anchors.right: parent.right
-									anchors.rightMargin: 15
-									horizontalAlignment: Text.AlignRight
-									font.pixelSize: 17
-								}
-							}
-
-							Behavior on uuid {
-								ParallelAnimation {
-									NumberAnimation {
-										target: annoContainer1
-										properties: "x"
-										from: annoContent.x
-										to: (annoContent.x - annoContent.width)
-										duration: 500
-									}
-									NumberAnimation {
-										target: annoContainer2
-										properties: "x"
-										from: (annoContent.x + annoContent.width)
-										to: annoContent.x
-										duration: 500
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-
-			ListModel {
-				id: annoListModel
-			}
-
-			// Will be navigation.
-			Rectangle {
-				id: annoNav
-				height: 12
-				width: parent.width
-				color: "#00000000"
-				border.color: "#00000000"
-
-				Component {
-					id: annoNavDelegate
-					Rectangle {
-						width: 12
-						height: 12
-						color: "#00000000"
-						border.color: "#00000000"
-
-						Image {
-							source: index == aAnnoIdx ? '../../res/img/bullet_selected.png' : '../../res/img/bullet.png'
-							anchors.centerIn: parent
-						}
-					}
-				}
-				ListView {
-					id: annoNavList
-					width: parent.width
-
-					model: annoListModel
-					delegate: annoNavDelegate
-					orientation: ListView.Horizontal
-
-					anchors.left: parent.left
-					anchors.leftMargin: annoContent.width / 2
-					anchors.top: parent.bottom
-					anchors.topMargin: annoContent.height - 30
-				}
-			}
+            // Will be navigation.
+            PageIndicator {
+                id: annoNav
+                height: 20
+                interactive: true
+                bottomPadding: 2
+                rightPadding: 2
+                leftPadding: 2
+                topPadding: 2
+                spacing: 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: announcementView.bottom
+                anchors.topMargin: 0
+                currentIndex: announcementView.currentIndex
+                count: announcementView.count
+            }
 		}
 
 		// Border right
@@ -544,235 +392,70 @@ Column {
 			width: 1
 			height: parent.height
 			color: "#D2D2D2"
-		}
+        }
 
-		// News box
-		Rectangle {
-			height: parent.height
-			width: parent.width / 2
-			color: "#00000000"
-			border.color: "#00000000"
-			z: 5
 
-			// Will be content.
-			Rectangle {
-				id: newsContent
-				height: parent.height - newsNav.height
-				width: parent.width
-				color: "#00000000"
-				border.color: "#00000000"
+        // News box
+        Rectangle {
+            id: newsBox
+            height: parent.height
+            width: (parent.width / 2) - 1
+            color: '#ffffff'
+            clip: true
+            border.color: '#ffffff'
+            z: 15
 
-				Rectangle {
-					id: newsContainer1
-					height: parent.height
-					width: parent.width
-					property int idx: -1
-					property string uuid: ''
-					color: "#00000000"
-					border.color: "#00000000"
+            SwipeView {
+                id: newsView
+                height: parent.height - newsNav.height
+                width: parent.width
+                currentIndex: newsNav.currentIndex
+                background: Rectangle {
+                    color: "#ffffff"
+                }
+                Component.onCompleted: newsView.contentItem.highlightMoveDuration = 250
+                onCurrentIndexChanged: {
+                    if (currentIndex == 0) {
+                        state = "atBeginning"
+                        newsView.contentItem.highlightMoveDuration = 0
+                    } else if (currentIndex >= (count - 1)) {
+                        state = "atEnd"
+                        newsView.contentItem.highlightMoveDuration = 250
+                    } else {
+                        state = "inMiddle"
+                        newsView.contentItem.highlightMoveDuration = 250
+                    }
+                }
+                states: [
+                    State {
+                        name: "atBeginning"
+                    },
+                    State {
+                        name: "inMiddle"
+                    },
+                    State {
+                        name: "atEnd"
+                    }
+                ]
+            }
 
-					Image {
-						id: newsIcon1
-						source: ""
-						asynchronous: true
-						height: 110
-						anchors.leftMargin: 20
-						anchors.verticalCenter: parent.verticalCenter
-						fillMode: Image.PreserveAspectFit
-						anchors.left: parent.left
-					}
-					Text {
-						id: newsText1
-						height: parent.height
-						width: parent.width - newsIcon1.width - 20 - 25
-						anchors.left: newsIcon1.right
-						anchors.leftMargin: 25
-						font.pointSize: 23
-						horizontalAlignment: Text.AlignLeft
-						verticalAlignment: Text.AlignVCenter
-						wrapMode: Text.WordWrap
-						text: ""
-
-						Text {
-							id: newsTopic1
-							width: 168
-							height: 30
-							color: "#999999"
-							text: ""
-							anchors.top: parent.top
-							anchors.topMargin: 19
-							anchors.right: parent.right
-							anchors.rightMargin: 15
-							horizontalAlignment: Text.AlignRight
-							font.pixelSize: 17
-						}
-					}
-
-					Behavior on uuid {
-						ParallelAnimation {
-							NumberAnimation {
-								target: newsContainer2
-								properties: "x"
-								from: newsContent.x
-								to: (newsContent.x - newsContent.width)
-								duration: 500
-							}
-							NumberAnimation {
-								target: newsContainer1
-								properties: "x"
-								from: (newsContent.x + newsContent.width)
-								to: newsContent.x
-								duration: 500
-							}
-						}
-					}
-				}
-				Rectangle {
-					id: newsContainer2
-					height: parent.height
-					width: parent.width
-					x: parent.x + parent.width
-					y: parent.y
-					property int idx: -1
-					property string uuid: ''
-					color: "#00000000"
-					border.color: "#00000000"
-
-					Image {
-						id: newsIcon2
-						source: ""
-						asynchronous: true
-						height: 110
-						anchors.leftMargin: 20
-						anchors.verticalCenter: parent.verticalCenter
-						fillMode: Image.PreserveAspectFit
-						anchors.left: parent.left
-					}
-					Text {
-						id: newsText2
-						height: parent.height
-						width: parent.width - newsIcon2.width - 20 - 25
-						anchors.left: newsIcon2.right
-						anchors.leftMargin: 25
-						font.pointSize: 23
-						horizontalAlignment: Text.AlignLeft
-						verticalAlignment: Text.AlignVCenter
-						wrapMode: Text.WordWrap
-						text: ""
-
-						Text {
-							id: newsTopic2
-							width: 168
-							height: 30
-							color: "#999999"
-							text: ""
-							anchors.top: parent.top
-							anchors.topMargin: 19
-							anchors.right: parent.right
-							anchors.rightMargin: 15
-							horizontalAlignment: Text.AlignRight
-							font.pixelSize: 17
-						}
-					}
-
-					Behavior on uuid {
-						ParallelAnimation {
-							NumberAnimation {
-								target: newsContainer1
-								properties: "x"
-								from: newsContent.x
-								to: (newsContent.x - newsContent.width)
-								duration: 500
-							}
-							NumberAnimation {
-								target: newsContainer2
-								properties: "x"
-								from: (newsContent.x + newsContent.width)
-								to: newsContent.x
-								duration: 500
-							}
-						}
-					}
-				}
-
-				ListModel {
-					id: newsListModel
-				}
-			}
-
-			// Will be navigation.
-			Rectangle {
-				id: newsNav
-				height: 12
-				width: parent.width
-				color: "#00000000"
-				border.color: "#00000000"
-
-				Component {
-					id: newsNavDelegate
-					Rectangle {
-						width: 12
-						height: 12
-						color: "#00000000"
-						border.color: "#00000000"
-
-						Image {
-							id: dayListDelegateImage
-							source: index == aNewsIdx ? '../../res/img/bullet_selected.png' : '../../res/img/bullet.png'
-							anchors.centerIn: parent
-						}
-					}
-				}
-				ListView {
-					id: newsNavList
-					width: parent.width
-
-					model: newsListModel
-					delegate: newsNavDelegate
-					orientation: ListView.Horizontal
-
-					anchors.left: parent.left
-					anchors.leftMargin: newsContent.width / 2
-					anchors.top: parent.bottom
-					anchors.topMargin: newsContent.height - 30
-				}
-			}
-		}
-
-		states: [
-			State {
-				name: "visible"
-				PropertyChanges { target: ebbHeadBox; visible: 1 }
-			},
-			State {
-				name: "hidden"
-				PropertyChanges { target: ebbHeadBox; visible: 0 }
-			}
-		]
-
-		transitions: [
-			Transition {
-				from: "hidden"
-				to: "visible"
-				NumberAnimation {
-					target: ebbHeadBox
-					properties: "y"
-					from: -ebbHeadBox.height
-					to: ebbHeadContainer.y + ebbHeadContainer.height
-					duration: 2000
-				}
-			},
-			Transition {
-				to: "hidden"
-				NumberAnimation {
-					target: ebbHeadBox
-					properties: "y"
-					from: ebbHeadBox.y
-					to: -ebbHeadBox.height
-					duration: 2000
-				}
-			}
-		]
+            // Will be navigation.
+            PageIndicator {
+                id: newsNav
+                height: 20
+                interactive: true
+                bottomPadding: 2
+                rightPadding: 2
+                leftPadding: 2
+                topPadding: 2
+                spacing: 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: newsView.bottom
+                anchors.topMargin: 0
+                currentIndex: newsView.currentIndex
+                count: newsView.count
+            }
+        }
 	}
 
 	Item {
@@ -798,9 +481,9 @@ Column {
 				id: ebbDayBox
 				anchors.centerIn: parent
 				height: 59
-				color: "#00000000"
-				border.color: "#00000000"
-				width: 452
+                radius: 10
+                color: "#00000000"
+                width: 452
 
 				Image {
 					source: "../../res/img/vplan_indicator_bg.png"
@@ -917,7 +600,7 @@ Column {
 
 			Rectangle {
 				id: ebbStandCopy
-				width: 227
+                width: 227
 				height: 26
 				color: "#00000000"
 				border.color: "#00000000"
@@ -938,14 +621,14 @@ Column {
 
 					Rectangle {
 						id: ebbStand
-						width: 103
+                        width: 113
 						height: parent.height
 						color: "transparent"
 
 						Text {
 							id: txtStand
 							color: "#3E3E3E"
-							text: qsTr("Stand: ") + " "
+                            text: qsTr("Stand: ") + " "
 							horizontalAlignment: Text.AlignHCenter
 							verticalAlignment: Text.AlignVCenter
 							z: 5
@@ -1181,7 +864,7 @@ Column {
 		// Do this here only, if we don't have data yet!
 		if (aDayList.length <= 0) {
 			aPlanList = []
-			txtStand.text = qsTr("Lade Daten...")
+            txtStand.text = qsTr("Lade Daten...")
 			dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
 			reloadListModels()
 			ebbPlanHandler.setMaxEntries(Math.floor(vplanContentContainer.height / (gridVplan.cellHeight + 27))*2)
@@ -1192,97 +875,6 @@ Column {
 		dayListModel.clear()
 		for (var i = 0; i < aDayList.length; i++) {
 			dayListModel.append(aDayList[i])
-		}
-	}
-
-	function nextNews() {
-		// Only if there are any news!
-		if (newsListModel.count <= 0) {
-			newsText1.text = ''
-			newsTopic1.text = ''
-			newsIcon1.source = ''
-			newsContainer1.idx = -1
-			newsContainer1.uuid = ''
-			newsText2.text = ''
-			newsTopic2.text = ''
-			newsIcon2.source = ''
-			newsContainer2.idx = -1
-			newsContainer2.uuid = ''
-			aNewsIdx = -1
-			return false;
-		}
-
-		aNewsIdx += 1
-		if (aNewsIdx >= newsListModel.count) {
-			aNewsIdx = 0
-		}
-
-		var newsObj = newsListModel.get(aNewsIdx)
-		if (aFirstNews) {
-			// We prepare the first rectangle.
-			newsText1.text = newsObj.subject
-			newsTopic1.text = newsObj.topic
-			newsIcon1.source = newsObj.img
-			newsContainer1.idx = aNewsIdx
-			newsContainer1.uuid = ebbPlanHandler.generateUuid
-			aFirstNews = false
-		} else {
-			// We prepare the second rectangle.
-			newsText2.text = newsObj.subject
-			newsTopic2.text = newsObj.topic
-			newsIcon2.source = newsObj.img
-			newsContainer2.idx = aNewsIdx
-			newsContainer2.uuid = ebbPlanHandler.generateUuid
-			aFirstNews = true
-		}
-	}
-
-	function nextAnnouncement() {
-		// Only if there are any news!
-		if (annoListModel.count <= 0) {
-			aAnnoIdx = -1
-			// Give some basic information
-			annoText1.text = qsTr('Willkommen in der Schule!')
-			annoIcon1.source = '../../res/img/alert.png'
-			annoTopic1.text = ''
-			annoContainer1.idx = -1
-			annoContainer1.uuid = ''
-			annoText2.text = qsTr('Willkommen in der Schule!')
-			annoIcon2.source = '../../res/img/alert.png'
-			annoTopic2.text = ''
-			annoContainer2.idx = -1
-			annoContainer2.uuid = ''
-			aFirstAnno = false
-			return false;
-		}
-
-		if ((aAnnoIdx + 1) == annoListModel.count && annoListModel.count <= 1) {
-			// Do not do anything.
-			return true;
-		}
-
-		aAnnoIdx += 1
-		if (aAnnoIdx >= annoListModel.count) {
-			aAnnoIdx = 0
-		}
-
-		var annoObj = annoListModel.get(aAnnoIdx)
-		if (aFirstAnno) {
-			// We prepare the first rectangle.
-			annoText1.text = annoObj.text
-			annoIcon1.source = annoObj.img
-			annoTopic1.text = annoObj.section
-			annoContainer1.idx = aAnnoIdx
-			annoContainer1.uuid = ebbPlanHandler.generateUuid
-			aFirstAnno = false
-		} else {
-			// We prepare the second rectangle.
-			annoText2.text = annoObj.text
-			annoIcon2.source = annoObj.img
-			annoTopic2.text = annoObj.section
-			annoContainer2.idx = aAnnoIdx
-			annoContainer2.uuid = ebbPlanHandler.generateUuid
-			aFirstAnno = true
 		}
 	}
 
