@@ -1,4 +1,4 @@
-import QtQuick 2.4
+import QtQuick 2.6
 import QtGraphicalEffects 1.0
 import QtQuick.Controls 1.3
 import QtQuick.Window 2.2
@@ -1021,6 +1021,7 @@ Column {
 				spacing: 5
 
 				Text {
+					id: idClassn
 					text: classn
 					height: parent.height
 					width: ebbContainer.colClass * parent.width
@@ -1030,6 +1031,7 @@ Column {
 					verticalAlignment: Text.AlignVCenter
 				}
 				Text {
+					id: idHour
 					text: hour
 					height: parent.height
 					width: ebbContainer.colHour * parent.width
@@ -1039,21 +1041,27 @@ Column {
 					verticalAlignment: Text.AlignVCenter
 				}
 				Text {
+					id: idOriginal
 					text: original
 					height: parent.height
 					width: ebbContainer.colOriginal * parent.width
 					font.pixelSize: 19
 					color: '#555'
 					wrapMode: Text.WordWrap
+					maximumLineCount: 2
+					elide: Text.ElideRight
 					verticalAlignment: Text.AlignVCenter
 				}
 				Text {
+					id: idChange
 					text: change
 					height: parent.height
-					width: ebbContainer.colChange * parent.width
+					width: parent.width - idClassn.width - idHour.width - idOriginal.width - 15
 					font.pixelSize: 19
 					color: '#555'
 					wrapMode: Text.WordWrap
+					maximumLineCount: 2
+					elide: Text.ElideRight
 					verticalAlignment: Text.AlignVCenter
 				}
 			}

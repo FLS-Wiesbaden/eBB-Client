@@ -3,7 +3,7 @@
 __pycache__
 /cache
 /build
-/certs
+/certs*
 /*.log
 /vclient.log
 /vclient.pid

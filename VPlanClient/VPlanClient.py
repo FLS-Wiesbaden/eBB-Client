@@ -826,7 +826,8 @@ class VPlan(QObject):
 				planT[str(day)].sortEntries()
 
 			# calculate field factors...
-			maxFieldLengths['classn'] += 3
+			maxFieldLengths['classn'] += 8
+			maxFieldLengths['hour'] += 5
 			comLength = 0
 			for k, v in maxFieldLengths.items():
 				comLength += v
