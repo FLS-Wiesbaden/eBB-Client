@@ -1318,10 +1318,10 @@ class VPlanMainWindow(QQuickView):
 
 		#rootContext = self.rootContext()
 		rootObject = self.rootObject()
-		self.ebbPlanHandler = rootObject.findChild(EbbPlanHandler, 'ebbPlanHandler')
+		self.ebbPlanHandler = rootObject.findChild(EbbPlanHandler)
 		self.ebbPlanHandler.setEbbConfig(self.config)
 		self.ebbPlanHandler.setFlsConfig(self.flsConfig)
-		self.ebbContentHandler = rootObject.findChild(EbbContentHandler, 'ebbContentHandler')
+		self.ebbContentHandler = rootObject.findChild(EbbContentHandler)
 		self.ebbContentHandler.setEbbConfig(self.config)
 		self.ebbContentHandler.setFlsConfig(self.flsConfig)
 		self.ebbContentHandler.setServer(self.server)
