@@ -1532,7 +1532,7 @@ class EbbContentHandler(QObject):
 				srcPos = attributes.find('src="')
 				if srcPos < 0 or attributes[srcPos + 5:].startswith('http://') or \
 					attributes[srcPos + 5:].startswith('https://'):
-					self.compiledContentBody += self.contentBody[res.start() + 1:res.end()]
+					self.compiledContentBody += self.contentBody[res.start():res.end()]
 				else:
 					imgSrc = '<' + res.group(1)
 					imgSrc += attributes[:srcPos + 5]
