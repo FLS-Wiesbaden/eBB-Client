@@ -106,6 +106,7 @@ Item {
 			anchors.topMargin: 80 + ebbHeadContainer.height
 			width: contentContent.width
 			height: contentContent.height
+			visible: contentText.text.length > 0
 
 			Rectangle {
 				anchors.fill: parent
@@ -120,7 +121,6 @@ Item {
 				border.color: "#bbbbbb"
 				border.width: 1
 				anchors.centerIn: parent
-
 			}
 
 			InnerShadow {

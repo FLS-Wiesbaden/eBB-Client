@@ -3,6 +3,8 @@ import QtGraphicalEffects 1.0
 import QtQuick.Controls 1.3
 import QtQuick.Window 2.2
 import EbbPlanHandler 1.0
+import EbbNewsHandler 1.0
+import EbbAnnouncementHandler 1.0
 
 Column {
 	id: ebbContainer
@@ -45,38 +47,41 @@ Column {
 			ebbContainer.loadPrimaryData()
 			ebbDayBox.color = "#00000000"
 		}
+		
 		onDisconnected: {
 			ebbDayBox.color = "#DC8A8A"
 		}
+
 		onReset: {
 			aDayList = []
 			aPlanList = []
-			annoListModel.clear()
-			newsListModel.clear()
 		}
+
 		onSuspendTv: {
 			console.log('Stopped change timer in SuspendTv')
 			ebbContainer.suspendPlan()
 		}
+
 		onResumeTv: {
 			aDayIdx = -1
 			aPageIdx = -1
 			console.log('Started vplan animation.')
 			ebbContainer.continuePlan()
 		}
+
 		onLoadDesignPictures: {
 			ebbHeadImgMiddle.source = headerCenterUrl
 			ebbHeadImgLeft.source = headerRptUrl
 			ebbHeadImgRight.source = headerRptUrl
 		}
+
 		onTimerChange: {
 			vplanTimer.interval = vplanInterval
-			newsTimer.interval = newsInterval
-			annoTimer.interval = annoInterval
 		}
+
 		onEbbConfigLoaded: {
-			lblRightColumn.text = ebbPlanHandler.rightTitle
-			lblLeftColumn.text = ebbPlanHandler.leftTitle
+			lblLeftColumn.text = ebbAnnouncementHandler.columnTitle
+			lblRightColumn.text = ebbNewsHandler.columnTitle
 			if (ebbPlanHandler.showTopBoxes) {
 				if (ebbHeadBox.state == 'hidden') {
 					ebbHeadBox.state = 'visible'
@@ -95,6 +100,129 @@ Column {
 				}
 			}
 		}
+
+		onPlanAvailable: {
+			console.log('Yeah... new plan is available.')
+			aDayList = ebbPlanHandler.getTimes
+			aPlanList = []
+			txtStand.text = qsTr('Stand: ') + ebbPlanHandler.getStand + ' h'
+			reloadListModels()
+			// restart timer - just to be sure, that he not immediately change
+			// the page!
+			prepareNextPage()
+			if (vplanTimer.running) {
+				vplanTimer.stop()
+				vplanTimer.start()
+			}
+		}
+
+		onPlanColSizeChanged: {
+			colClass = planSizes.classn
+			colHour = planSizes.hour
+			colOriginal = planSizes.original
+			colChange = planSizes.change
+		}
+	}
+
+	EbbAnnouncementHandler {
+		id: ebbAnnouncementHandler
+		objectName: "ebbAnnouncementHandler"
+
+		onReset: {
+			annoListModel.clear()
+		}
+
+		onTimerChange: {
+			annoTimer.interval = annoInterval
+		}
+
+		onAnnouncementAdded: {
+			annoListModel.append({
+				'aid': anno.id, 'title': anno.title, 'section': anno.section, 'text': anno.text,
+				'img': '../../res/img/alert.png'
+			})
+			if (aAnnoIdx < 0) {
+				// Populate the next news immediately!
+				nextAnnouncement()
+			}
+		}
+
+		onAnnouncementUpdate: {
+			// is the id already in it?
+			var foundIdx = -1
+			var idx = 0
+			var annoTmp = null
+			while (idx < annoListModel.count && foundIdx < 0) {
+				annoTmp = annoListModel.get(idx)
+				if (annoTmp.aid == anno.id) {
+					foundIdx = idx
+					break
+				}
+				idx += 1
+			}
+			if (foundIdx >= 0) {
+				console.log('Found anno to update.')
+				annoListModel.set(foundIdx, {
+					'aid': anno.id, 'title': anno.title, 'section': anno.section, 'text': anno.text,
+					'img': '../../res/img/alert.png'
+				})
+				// Is the current updated also the active one?
+				if (aAnnoIdx == foundIdx) {
+					updateActiveAnno(false)
+				}
+			} else {
+				console.log('Didnt found anno. Added it.')
+				annoListModel.append({
+					'aid': anno.id, 'title': anno.title, 'section': anno.section, 'text': anno.text,
+					'img': '../../res/img/alert.png'
+				})				
+				console.log('Have now: ' + annoListModel.count)
+			}
+		}
+
+		onAnnouncementDelete: {
+			// is the id already in it?
+			var foundIdx = -1
+			var idx = 0
+			var annoTmp = null
+			while (idx < annoListModel.count && foundIdx < 0) {
+				annoTmp = annoListModel.get(idx)
+				if (annoTmp.aid == annoId) {
+					foundIdx = idx
+					break
+				}
+				idx += 1
+			}
+
+			if (foundIdx >= 0) {
+				annoListModel.remove(foundIdx)
+				console.log('Removed announcement index ' + foundIdx + ' with id ' + annoId)
+				if (foundIdx == aAnnoIdx) {
+					console.log('Deleted announcement was the current shown one. Iterate...')
+					nextAnnouncement()
+					// In case we decreased to exactly 1 entry, the section didn't done anything.
+					// Therefore force it here:
+					if (annoListModel.count <= 1) {
+						updateActiveAnno(true)
+					}
+				}
+			}
+			console.log('Have now: ' + annoListModel.count)
+		}
+	}
+
+	EbbNewsHandler {
+		id: ebbNewsHandler
+		objectName: "ebbNewsHandler"
+
+		onReset: {
+			newsListModel.clear()
+		}
+
+		onTimerChange: {
+			newsTimer.interval = newsInterval
+		}
+
 		// Data handlers:
 		onNewsAdded: {
 			newsListModel.append({'nid': news.id, 'subject': news.subject, 'topic': news.topic, 'img': news.imgUrl})
@@ -103,6 +231,7 @@ Column {
 				nextNews()
 			}
 		}
+
 		onNewsUpdate: {
 			// is the id already in it?
 			var foundIdx = -1
@@ -122,6 +251,7 @@ Column {
 				newsListModel.append({'nid': news.id, 'subject': news.subject, 'topic': news.topic, 'img': news.imgurl})
 			}
 		}
+
 		onNewsDeleted: {
 			// is the id already in it?
 			var foundIdx = -1
@@ -143,85 +273,6 @@ Column {
 					nextNews()
 				}
 			}
-		}
-		onAnnouncementAdded: {
-			annoListModel.append({
-				'aid': anno.id, 'title': anno.title, 'section': anno.section, 'text': anno.text,
-				'img': '../../res/img/alert.png'
-			})
-			if (aAnnoIdx < 0) {
-				// Populate the next news immediately!
-				nextAnnouncement()
-			}
-		}
-		onAnnouncementUpdate: {
-			// is the id already in it?
-			var foundIdx = -1
-			var idx = 0
-			var annoTmp = null
-			while (idx < annoListModel.count && foundIdx < 0) {
-				annoTmp = annoListModel.get(idx)
-				if (annoTmp.aid == anno.id) {
-					foundIdx = idx
-					break
-				}
-				idx += 1
-			}
-			if (foundIdx >= 0) {
-				annoListModel.set(foundIdx, {
-					'aid': anno.id, 'title': anno.title, 'section': anno.section, 'text': anno.text,
-					'img': '../../res/img/alert.png'
-				})
-			} else {
-				console.log('Didnt found anno. Added it.')
-				annoListModel.append({
-					'aid': anno.id, 'title': anno.title, 'section': anno.section, 'text': anno.text,
-					'img': '../../res/img/alert.png'
-				})				
-				console.log('Have now: ' + annoListModel.count)
-			}
-		}
-		onAnnouncementDelete: {
-			// is the id already in it?
-			var foundIdx = -1
-			var idx = 0
-			var annoTmp = null
-			while (idx < annoListModel.count && foundIdx < 0) {
-				annoTmp = annoListModel.get(idx)
-				if (annoTmp.aid == annoId) {
-					foundIdx = idx
-					break
-				}
-				idx += 1
-			}
-
-			if (foundIdx >= 0) {
-				annoListModel.remove(foundIdx)
-				console.log('Removed announcement index ' + foundIdx + ' with id ' + annoId)
-				if (foundIdx == aAnnoIdx) {
-					nextAnnouncement()
-				}
-			}
-		}
-		onPlanAvailable: {
-			console.log('Yeah... new plan is available.')
-			aDayList = ebbPlanHandler.getTimes
-			aPlanList = []
-			txtStand.text = qsTr('Stand: ') + ebbPlanHandler.getStand + ' h'
-			reloadListModels()
-			// restart timer - just to be sure, that he not immediately change
-			// the page!
-			prepareNextPage()
-			if (vplanTimer.running) {
-				vplanTimer.stop()
-				vplanTimer.start()
-			}
-		}
-		onPlanColSizeChanged: {
-			colClass = planSizes.classn
-			colHour = planSizes.hour
-			colOriginal = planSizes.original
-			colChange = planSizes.change
 		}
 	}
 
@@ -1232,7 +1283,7 @@ Column {
 			newsTopic1.text = newsObj.topic
 			newsIcon1.source = newsObj.img
 			newsContainer1.idx = aNewsIdx
-			newsContainer1.uuid = ebbPlanHandler.generateUuid
+			newsContainer1.uuid = ebbNewsHandler.generateUuid
 			aFirstNews = false
 		} else {
 			// We prepare the second rectangle.
@@ -1240,13 +1291,13 @@ Column {
 			newsTopic2.text = newsObj.topic
 			newsIcon2.source = newsObj.img
 			newsContainer2.idx = aNewsIdx
-			newsContainer2.uuid = ebbPlanHandler.generateUuid
+			newsContainer2.uuid = ebbNewsHandler.generateUuid
 			aFirstNews = true
 		}
 	}
 
 	function nextAnnouncement() {
-		// Only if there are any news!
+		// Only if there are any announcement!
 		if (annoListModel.count <= 0) {
 			aAnnoIdx = -1
 			// Give some basic information
@@ -1281,7 +1332,7 @@ Column {
 			annoIcon1.source = annoObj.img
 			annoTopic1.text = annoObj.section
 			annoContainer1.idx = aAnnoIdx
-			annoContainer1.uuid = ebbPlanHandler.generateUuid
+			annoContainer1.uuid = ebbAnnouncementHandler.generateUuid
 			aFirstAnno = false
 		} else {
 			// We prepare the second rectangle.
@@ -1289,8 +1340,41 @@ Column {
 			annoIcon2.source = annoObj.img
 			annoTopic2.text = annoObj.section
 			annoContainer2.idx = aAnnoIdx
-			annoContainer2.uuid = ebbPlanHandler.generateUuid
+			annoContainer2.uuid = ebbAnnouncementHandler.generateUuid
 			aFirstAnno = true
+		}
+	}
+
+	function updateActiveAnno(guidChange) {
+		console.log('Update the active shown announcement')
+		var annoObj = annoListModel.get(aAnnoIdx)
+		var bFirstAnno = aFirstAnno
+		if (guidChange) {
+			if (aFirstAnno) {
+				bFirstAnno = false
+			} else {
+				bFirstAnno = true
+			}
+		}
+		// Opposite to nextAnnouncement()!
+		if (bFirstAnno) {
+			// We prepare the second rectangle.
+			annoText2.text = annoObj.text
+			annoIcon2.source = annoObj.img
+			annoTopic2.text = annoObj.section
+			annoContainer2.idx = aAnnoIdx
+			if (guidChange) {
+				annoContainer1.uuid = ebbAnnouncementHandler.generateUuid
+			}
+		} else {
+			// We prepare the first rectangle.
+			annoText1.text = annoObj.text
+			annoIcon1.source = annoObj.img
+			annoTopic1.text = annoObj.section
+			annoContainer1.idx = aAnnoIdx
+			if (guidChange) {
+				annoContainer2.uuid = ebbAnnouncementHandler.generateUuid
+			}
 		}
 	}
 
@@ -1378,9 +1462,11 @@ Column {
 
 	function continuePlan() {
 		vplanTimer.start()
-		if (ebbPlanHandler.showTopBoxes) {
-			newsTimer.start()
+		if (ebbAnnouncementHandler.showBox) {
 			annoTimer.start()
+		}
+		if (ebbNewsHandler.showBox) {
+			newsTimer.start()
 		}
 	}
 

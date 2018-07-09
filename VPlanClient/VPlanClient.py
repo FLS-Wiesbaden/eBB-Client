@@ -513,26 +513,37 @@ class DsbServer(QThread):
 				for fd, flag in events:
 					s = fd_to_socket[fd]
 					if flag & (select.POLLIN | select.POLLPRI):
-						try:
-							newData = s.recv(4096)
-						except SSL.SysCallError as e:
-							log.error('error occurred while reading (SysCallError): %s' % (e,))
-							newData = None
-							error = True
-							self.runState = False
-							continue
-						except SSL.ZeroReturnError as e:
-							log.info('Connection closed (ZeroReturnError): %s!' % (e,))
-							newData = None
-						except SSL.WantReadError as e:
-							log.error('error occurred while reading (WantReadError): %s' % (e,))
-						except SSL.WantWriteError as e:
-							log.error('error occurred while reading (WantWriteError): %s' % (e,))
-						except SSL.WantX509LookupError as e:
-							log.error('error occurred while reading (WantX509LookupError): %s' % (e,))
-						except SSL.Error as e:
-							# maybe client does not use ssl
-							log.error('error occurred while reading (ssl error): %s' % (e,))
+						# read til \n
+						newData = b''
+						cancel = False
+						while not cancel:
+							try:
+								newData += s.recv(1)
+							except SSL.SysCallError as e:
+								log.error('error occurred while reading (SysCallError): %s' % (e,))
+								newData = None
+								error = True
+								self.runState = False
+								continue
+							except SSL.ZeroReturnError as e:
+								log.info('Connection closed (ZeroReturnError): %s!' % (e,))
+								newData = None
+								cancel = True
+							except SSL.WantReadError as e:
+								log.error('error occurred while reading (WantReadError): %s' % (e,))
+								cancel = True
+							except SSL.WantWriteError as e:
+								log.error('error occurred while reading (WantWriteError): %s' % (e,))
+								cancel = True
+							except SSL.WantX509LookupError as e:
+								log.error('error occurred while reading (WantX509LookupError): %s' % (e,))
+								cancel = True
+							except SSL.Error as e:
+								# maybe client does not use ssl
+								log.error('error occurred while reading (ssl error): %s' % (e,))
+								cancel = True
+							if newData[-1:] == b'\n':
+								cancel = True
 
 						if newData:
 							quitApp = False
@@ -980,19 +991,11 @@ class EbbPlanHandler(QObject):
 	reset = pyqtSignal()
 	loadDesignPictures = pyqtSignal([QUrl, QUrl], arguments=['headerCenterUrl', 'headerRptUrl'])
 	# timer signals
-	timerChange = pyqtSignal([QVariant, QVariant, QVariant], arguments=['vplanInterval', 'newsInterval', 'annoInterval'])
+	timerChange = pyqtSignal([QVariant], arguments=['vplanInterval'])
 
 	# model signals
-	newsAdded = pyqtSignal([QVariant], arguments=['news'])
-	newsUpdate = pyqtSignal([QVariant], arguments=['news'])
-	newsDeleted = pyqtSignal([QVariant], arguments=['newsId'])
-	announcementAdded = pyqtSignal([QVariant], arguments=['anno'])
-	announcementUpdate = pyqtSignal([QVariant], arguments=['anno'])
-	announcementDelete = pyqtSignal([QVariant], arguments=['annoId'])
-
 	planAvailable = pyqtSignal()
 	planColSizeChanged = pyqtSignal([QVariant], arguments=['planSizes'])
-	cycleTimesChanged = pyqtSignal([QVariant, QVariant, QVariant, QVariant], arguments=['newsTime', 'annoTime', 'planTime', 'contentTime'])
 
 	def __init__(self, parent=None):
 		QObject.__init__(self, parent)
@@ -1003,26 +1006,14 @@ class EbbPlanHandler(QObject):
 		self.flsConfig = flsConfig
 		self.maxEntries = 0
 		self.vplanInterval = 4
-		self.newsInterval = 7
-		self.annoInterval = 4
-		self.uuidGenerator = QUuid()
-
 		self.plan = VPlan()
 
 	def setEbbConfig(self, config):
 		self.ebbConfig = config
 		self.ebbConfigLoaded.emit()
-		if self.ebbConfig.getint('appearance', 'plan_cycle_time') != self.vplanInterval \
-			or self.ebbConfig.getint('appearance', 'news_cycle_time') != self.newsInterval \
-			or self.ebbConfig.getint('appearance', 'announcement_cycle_time') != self.annoInterval:
+		if self.ebbConfig.getint('appearance', 'plan_cycle_time') != self.vplanInterval:
 			self.vplanInterval = self.ebbConfig.getint('appearance', 'plan_cycle_time')
-			self.newsInterval = self.ebbConfig.getint('appearance', 'news_cycle_time')
-			self.annoInterval = self.ebbConfig.getint('appearance', 'announcement_cycle_time')
-			self.timerChange.emit(
-				QVariant(self.vplanInterval*1000), 
-				QVariant(self.newsInterval*1000), 
-				QVariant(self.annoInterval*1000)
-			)
+			self.timerChange.emit(QVariant(self.vplanInterval*1000))
 
 	def setFlsConfig(self, config):
 		self.flsConfig = config
@@ -1060,16 +1051,6 @@ class EbbPlanHandler(QObject):
 			return now >= base
 		else: 
 			return True
-
-	def _generateUuid(self):
-		return str(self.uuidGenerator.createUuid().toString())
-
-	def _leftColumnTitle(self):
-		return self.flsConfig.get('vplan_tv', 'leftDescription')
-
-
-	def _rightColumnTitle(self):
-		return self.flsConfig.get('vplan_tv', 'rightDescription')
 
 	def _showTopBoxes(self):
 		return self.ebbConfig.getboolean('appearance', 'showTopBoxes')
@@ -1125,7 +1106,6 @@ class EbbPlanHandler(QObject):
 	def _triggerPresenter(self):
 		return self.plan.triggerPresenter
 
-
 	@pyqtSlot()
 	def onConnected(self):
 		self.connected.emit()
@@ -1138,9 +1118,6 @@ class EbbPlanHandler(QObject):
 	flscfg = pyqtProperty(str, fget=_flsConfig)
 	machineId = pyqtProperty(str, fget=_machineId)
 	showFutureDays = pyqtProperty(bool, fget=_showFutureDays)
-	generateUuid = pyqtProperty(str, fget=_generateUuid)
-	leftTitle = pyqtProperty(str, fget=_leftColumnTitle)
-	rightTitle = pyqtProperty(str, fget=_rightColumnTitle)
 	showTopBoxes = pyqtProperty(bool, fget=_showTopBoxes)
 
 	# plan
@@ -1150,6 +1127,320 @@ class EbbPlanHandler(QObject):
 	getNextPlan = pyqtProperty(QVariant, fget=_getNextPlan)
 	triggerPresenter = pyqtProperty(bool, fget=_triggerPresenter)
 	currentDayIndex = pyqtProperty(int, fget=_currentDayIndex)
+
+class EbbNewsHandler(QObject):
+	flsConfigLoaded = pyqtSignal()
+	ebbConfigLoaded = pyqtSignal()
+	reset = pyqtSignal()
+
+	# timer signals
+	timerChange = pyqtSignal([QVariant], arguments=['newsInterval'])
+
+	# model signals
+	newsAdded = pyqtSignal([QVariant], arguments=['news'])
+	newsUpdate = pyqtSignal([QVariant], arguments=['news'])
+	newsDeleted = pyqtSignal([QVariant], arguments=['newsId'])
+
+	def __init__(self, parent=None):
+		QObject.__init__(self, parent)
+		# workaround to set these things from the beginning!
+		global globConfig
+		global flsConfig
+		self.ebbConfig = globConfig
+		self.flsConfig = flsConfig
+		self.newsInterval = 7
+		self.uuidGenerator = QUuid()
+
+	def setEbbConfig(self, config):
+		self.ebbConfig = config
+		self.ebbConfigLoaded.emit()
+		if self.ebbConfig.getint('appearance', 'news_cycle_time') != self.newsInterval:
+			self.newsInterval = self.ebbConfig.getint('appearance', 'news_cycle_time')
+			self.timerChange.emit(QVariant(self.newsInterval*1000))
+
+	def setFlsConfig(self, config):
+		self.flsConfig = config
+		self.flsConfigLoaded.emit()
+
+	def _config(self):
+		return self.ebbConfig.toJson()
+
+	def _flsConfig(self):
+		return self.flsConfig.toJson()
+
+	def _generateUuid(self):
+		return str(self.uuidGenerator.createUuid().toString())
+
+	def _columnTitle(self):
+		return self.flsConfig.get('vplan_tv', 'rightDescription')
+
+	def _showBox(self):
+		return self.ebbConfig.getboolean('appearance', 'showTopBoxes')
+
+	# news properties
+	config = pyqtProperty(str, fget=_config)
+	flscfg = pyqtProperty(str, fget=_flsConfig)
+	generateUuid = pyqtProperty(str, fget=_generateUuid)
+	columnTitle = pyqtProperty(str, fget=_columnTitle)
+	showBox = pyqtProperty(bool, fget=_showBox)
+
+class Announcement(object):
+
+	STATE_UNKNOWN = 0
+	STATE_PENDING = 1
+	STATE_DISPLAYED = 2
+	STATE_EXPIRED = 4
+
+	ACTION_NONE = 0
+	ACTION_SHOW = 1
+	ACTION_HIDE = 2
+
+	def __init__(self, id = None, showFrom = None, showTo = None, section = None, title = None, text = None):
+		self.id = id
+		self.sFrom = showFrom
+		self.sTo = showTo
+		self.section = section
+		self.title = title
+		self.text = text
+		self.isReleased = True
+		self.raw = ''
+		self.state = self.STATE_UNKNOWN
+
+	def canDisplay(self, chkTime = None):
+		if chkTime is None:
+			chkTime = datetime.datetime.now()
+
+		if self.sFrom is not None and chkTime < self.sFrom:
+			return False
+
+		if self.sTo is not None and chkTime > self.sTo:
+			return False
+
+		return True
+
+	def isExpired(self):
+		return self.sTo is not None and datetime.datetime.now() > self.sTo
+
+	def setState(self, state):
+		self.state = state
+
+	def getNextAction(self):
+		if self.state == self.STATE_PENDING:
+			if self.isExpired() or not self.isReleased:
+				self.state = self.STATE_EXPIRED
+				return (self.ACTION_HIDE, datetime.datetime.now())
+			elif self.sFrom is not None:
+				return (self.ACTION_SHOW, self.sFrom)
+			else:
+				return (self.ACTION_SHOW, datetime.datetime.now())
+
+		elif self.state == self.STATE_DISPLAYED:
+			if self.sTo is not None:
+				# next action is to expire/hide.
+				return (self.ACTION_HIDE, self.sTo)
+			elif not self.isReleased:
+				return (self.ACTION_HIDE, datetime.datetime.now())
+			else:
+				return (self.ACTION_NONE, None)
+
+		elif self.state == self.STATE_EXPIRED:
+			# here nothing will change anymore...
+			return (self.ACTION_NONE, None)
+
+		else:
+			return (self.ACTION_NONE, None)
+
+	def update(self, ser):
+		self.sFrom = datetime.datetime.strptime(ser['showFrom'], '%Y-%m-%d %H:%M:%S')
+		self.sTo = datetime.datetime.strptime(ser['showTo'], '%Y-%m-%d %H:%M:%S')
+		self.section = ser['section']
+		self.title = ser['title']
+		self.text = ser['text']
+		self.isReleased = True if ser['release'] == '1' else False
+		self.raw = ser
+
+	@classmethod
+	def parse(cls, ser):
+		"""
+			'id': '17', 'createTime': '2018-07-09 20:02:40', 'changeTime': '2018-07-09 20:37:09', 
+			'publishTime': '2018-07-09 20:37:09', 'release': '1', 'author': 'Lukas Schreiner', 
+			'createUid': '55', 'changeUid': '55', 'publishUid': '55', 'showFrom': '2018-07-09 20:01:00', 
+			'showTo': '2018-07-09 20:38:00', 'section': 'Website-Team', 'title': 'Website-Team sucht Mitglieder', 
+			'text': '<p>Als die einzig wahre AG in der FLS suchen wir dringend Nachwuchs!</p>\r\n<p>Melde dich doch unter irc.fls-wiesbaden.de!</p>'"
+		"""
+		self = cls()
+		self.id = ser['id']
+		self.sFrom = datetime.datetime.strptime(ser['showFrom'], '%Y-%m-%d %H:%M:%S')
+		self.sTo = datetime.datetime.strptime(ser['showTo'], '%Y-%m-%d %H:%M:%S')
+		self.section = ser['section']
+		self.title = ser['title']
+		self.text = ser['text']
+		self.isReleased = True if ser['release'] == '1' else False
+		self.raw = ser
+		self.state = self.STATE_PENDING
+
+		return self
+
+class EbbAnnouncementHandler(QObject):
+	flsConfigLoaded = pyqtSignal()
+	ebbConfigLoaded = pyqtSignal()
+	reset = pyqtSignal()
+
+	# timer signals
+	timerChange = pyqtSignal([QVariant], arguments=['annoInterval'])
+
+	# model signals
+	announcementAdded = pyqtSignal([QVariant], arguments=['anno'])
+	announcementUpdate = pyqtSignal([QVariant], arguments=['anno'])
+	announcementDelete = pyqtSignal([QVariant], arguments=['annoId'])
+
+	def __init__(self, parent=None):
+		QObject.__init__(self, parent)
+		# workaround to set these things from the beginning!
+		global globConfig
+		global flsConfig
+		self.ebbConfig = globConfig
+		self.flsConfig = flsConfig
+		self.annoInterval = 4
+		self.annoList = {}
+		self.annoTimer = None
+		self.uuidGenerator = QUuid()
+
+	def setEbbConfig(self, config):
+		self.ebbConfig = config
+		self.ebbConfigLoaded.emit()
+		if self.ebbConfig.getint('appearance', 'announcement_cycle_time') != self.annoInterval:
+			self.annoInterval = self.ebbConfig.getint('appearance', 'announcement_cycle_time')
+			self.timerChange.emit(QVariant(self.annoInterval*1000))
+
+	def setFlsConfig(self, config):
+		self.flsConfig = config
+		self.flsConfigLoaded.emit()
+
+	def setTimer(self, toTime):
+		sec = round((toTime - datetime.datetime.now()).seconds/2)*1000
+		# min. 1 sec
+		if sec < 1000:
+			sec = 1000
+		if self.annoTimer is None or not self.annoTimer.isActive():
+			self.annoTimer = QTimer()
+			self.annoTimer.setSingleShot(True)
+			self.annoTimer.start(sec)
+			self.annoTimer.timeout.connect(self.exeActions)
+			log.debug('Set EbbAnnouncementHandler::annoTimer to {:d} ms'.format(sec))
+		else:
+			# check time
+			if self.annoTimer.remainingTime() > sec:
+				self.annoTimer.start(sec)
+				log.debug('Set EbbAnnouncementHandler::annoTimer to {:d} ms'.format(sec))
+
+	@pyqtSlot()
+	def exeActions(self):
+		bestNextTime = None
+		bestNextAnnoId = None
+		keys = list(self.annoList.keys())
+		for annoId in keys:
+			anno = self.annoList[annoId]
+			(na, ap) = anno.getNextAction()
+			now = datetime.datetime.now()
+			if na == Announcement.ACTION_NONE:
+				continue
+			elif na == Announcement.ACTION_SHOW:
+				if ap <= now:
+					self.show(anno)
+					# schedule next action.
+					(na, ap) = anno.getNextAction()
+					if bestNextTime is None or ap < bestNextTime:
+						bestNextTime = ap
+						bestNextAnnoId = annoId
+				else:
+					if bestNextTime is None or ap < bestNextTime:
+						bestNextTime = ap
+						bestNextAnnoId = annoId
+			elif na == Announcement.ACTION_HIDE:
+				if ap <= now:
+					self.hide(anno)
+				else:
+					if bestNextTime is None or ap < bestNextTime:
+						bestNextTime = ap
+						bestNextAnnoId = annoId
+
+		if bestNextTime is not None:
+			log.info(
+				'Next known action on {:s} for id {:s}'.format(
+					bestNextTime.strftime('%Y-%m-%d %H:%M:%S'), 
+					bestNextAnnoId
+				)
+			)
+			self.setTimer(bestNextTime)
+
+	def add(self, anno):
+		n = Announcement.parse(anno)
+		log.info('New announcement: {:s} with title {:s}'.format(n.id, n.title))
+		if n.isReleased:
+			self.annoList[n.id] = n
+			(na, ap) = n.getNextAction()
+			if ap <= datetime.datetime.now():
+				log.debug('Announcement action executed immediately: {:s} with title {:s}'.format(n.id, n.title))
+				self.exeActions()
+			else:
+				log.debug(
+					'Announcement action timed: {:s} with title {:s} for {:s}'.format(
+						n.id, n.title, ap.strftime('%Y-%m-%d %H:%M:%S')
+					)
+				)
+				self.setTimer(ap)
+		else:
+			log.info('Announcement is not released: {:s} with title {:s}'.format(n.id, n.title))
+
+	def update(self, anno):
+		if anno['id'] in self.annoList.keys():
+			annoObj = self.annoList[anno['id']]
+			annoObj.update(anno)
+			if annoObj.state == Announcement.STATE_DISPLAYED:
+				self.announcementUpdate.emit(QVariant(annoObj.raw))
+		else:
+			self.add(anno)
+
+	def delete(self, annoId):
+		if annoId in self.annoList.keys():
+			anno = self.annoList[annoId]
+			self.hide(anno)
+		else:
+			log.warning('Cannot find announcement for deletion: {:s}'.format(annoId))
+
+	def show(self, anno):
+		log.info('Show announcement {:s} with title {:s}'.format(anno.id, anno.title))
+		self.announcementAdded.emit(QVariant(anno.raw))
+		anno.setState(Announcement.STATE_DISPLAYED)
+
+	def hide(self, anno):
+		log.info('Hide and delete announcement {:s} with title {:s}'.format(anno.id, anno.title))
+		self.announcementDelete.emit(QVariant(anno.id))
+		anno.setState(Announcement.STATE_EXPIRED)
+		del(self.annoList[anno.id])
+
+	def _config(self):
+		return self.ebbConfig.toJson()
+
+	def _flsConfig(self):
+		return self.flsConfig.toJson()
+
+	def _generateUuid(self):
+		return str(self.uuidGenerator.createUuid().toString())
+
+	def _columnTitle(self):
+		return self.flsConfig.get('vplan_tv', 'leftDescription')
+
+	def _showBox(self):
+		return self.ebbConfig.getboolean('appearance', 'showTopBoxes')
+
+	# news properties
+	config = pyqtProperty(str, fget=_config)
+	flscfg = pyqtProperty(str, fget=_flsConfig)
+	generateUuid = pyqtProperty(str, fget=_generateUuid)
+	columnTitle = pyqtProperty(str, fget=_columnTitle)
+	showBox = pyqtProperty(bool, fget=_showBox)
 
 class EbbContentHandler(QObject):
 	modeChanged = pyqtSignal(QVariant, arguments=['toMode'])
@@ -1287,6 +1578,12 @@ class VPlanMainWindow(QQuickView):
 	contentAssigned = pyqtSignal()
 	contentDeassigned = pyqtSignal()
 
+	DATA_TYPE_BINARY = 'binary'
+	DATA_TYPE_PLAN = 'Plan'
+	DATA_TYPE_NEWS = 'News'
+	DATA_TYPE_ANNOUNCEMENT = 'Announcement'
+	DATA_TYPE_CONTENT = 'Content'
+
 	def __init__(self, app):
 		QQuickView.__init__(self)
 
@@ -1321,6 +1618,12 @@ class VPlanMainWindow(QQuickView):
 		self.ebbPlanHandler = rootObject.findChild(EbbPlanHandler)
 		self.ebbPlanHandler.setEbbConfig(self.config)
 		self.ebbPlanHandler.setFlsConfig(self.flsConfig)
+		self.ebbAnnouncementHandler = rootObject.findChild(EbbAnnouncementHandler)
+		self.ebbAnnouncementHandler.setEbbConfig(self.config)
+		self.ebbAnnouncementHandler.setFlsConfig(self.flsConfig)
+		self.ebbNewsHandler = rootObject.findChild(EbbNewsHandler)
+		self.ebbNewsHandler.setEbbConfig(self.config)
+		self.ebbNewsHandler.setFlsConfig(self.flsConfig)
 		self.ebbContentHandler = rootObject.findChild(EbbContentHandler)
 		self.ebbContentHandler.setEbbConfig(self.config)
 		self.ebbContentHandler.setFlsConfig(self.flsConfig)
@@ -1405,6 +1708,10 @@ class VPlanMainWindow(QQuickView):
 			# inform the two js handlers.
 			self.ebbPlanHandler.setFlsConfig(self.flsConfig)
 			self.ebbPlanHandler.setEbbConfig(self.config)
+			self.ebbAnnouncementHandler.setFlsConfig(self.flsConfig)
+			self.ebbAnnouncementHandler.setEbbConfig(self.config)
+			self.ebbNewsHandler.setFlsConfig(self.flsConfig)
+			self.ebbNewsHandler.setEbbConfig(self.config)
 			self.ebbContentHandler.setFlsConfig(self.flsConfig)
 			self.ebbContentHandler.setEbbConfig(self.config)
 
@@ -1594,7 +1901,7 @@ class VPlanMainWindow(QQuickView):
 				else:
 					imgUrl = ''
 				news['imgUrl'] = imgUrl
-				self.ebbPlanHandler.newsAdded.emit(QVariant(news))
+				self.ebbNewsHandler.newsAdded.emit(QVariant(news))
 			elif msg.event == DsbMessage.EVENT_CHANGE and news is not None:
 				# extract image if there is an image.
 				parser = ContentImageFinder()
@@ -1605,20 +1912,17 @@ class VPlanMainWindow(QQuickView):
 				else:
 					imgUrl = ''
 				news['imgUrl'] = imgUrl
-				self.ebbPlanHandler.newsUpdate.emit(QVariant(news))
+				self.ebbNewsHandler.newsUpdate.emit(QVariant(news))
 			elif msg.event == DsbMessage.EVENT_DELETE:
-				self.ebbPlanHandler.newsDeleted.emit(QVariant(msg.id))
+				self.ebbNewsHandler.newsDeleted.emit(QVariant(msg.id))
 		elif msg.action == DsbMessage.ACTION_ANNOUNCEMENT:
 			anno = msg.value
 			if msg.event == DsbMessage.EVENT_CREATE:
-				self.ebbPlanHandler.announcementAdded.emit(QVariant(anno))
+				self.ebbAnnouncementHandler.add(anno)
 			elif msg.event == DsbMessage.EVENT_CHANGE:
-				if anno['release'] != '1':
-					self.ebbPlanHandler.announcementDelete.emit(QVariant(msg.id))
-				else:
-					self.ebbPlanHandler.announcementUpdate.emit(QVariant(anno))
+				self.ebbAnnouncementHandler.update(anno)
 			elif msg.event == DsbMessage.EVENT_DELETE:
-				self.ebbPlanHandler.announcementDelete.emit(QVariant(msg.id))
+				self.ebbAnnouncementHandler.delete(msg.id)
 		elif msg.action == DsbMessage.ACTION_VPLAN:
 			# request for plan again. 
 			log.info('Got a notification about a new plan. Reload plan...')
@@ -1626,10 +1930,14 @@ class VPlanMainWindow(QQuickView):
 			req.setPriority(QNetworkRequest.HighPriority)
 			self.manager.get(req)
 		elif msg.action == DsbMessage.ACTION_INFOSCREEN:
+			# {"target": "dsb", "event": "delete", "action": "infoscreen", "id": "17", "value": null}
 			if msg.event == DsbMessage.EVENT_DELETE:
 				# by default nothing here.
 				self.ebbContentHandler.contentDeassigned.emit()
 				self.contentDeassigned.emit()
+				self.ebbContentHandler.setContentBody('')
+				self.ebbContentHandler._contentArrow = False
+				self.ebbContentHandler.contentBodyChanged.emit()
 			else:
 				dataContent = msg.value
 				# by default nothing here.
@@ -1721,7 +2029,7 @@ class VPlanMainWindow(QQuickView):
 	def dataLoadFinished(self, reply):
 		# first retrieve the ebb content type (X-eBB-Type).
 		if not reply.hasRawHeader(QByteArray.fromRawData('X-eBB-Type'.encode('utf-8'))):
-			dataType = 'binary'
+			dataType = self.DATA_TYPE_BINARY
 		else:
 			dataType = reply.rawHeader(QByteArray.fromRawData('X-eBB-Type'.encode('utf-8'))).data().decode('utf-8')
 
@@ -1732,7 +2040,7 @@ class VPlanMainWindow(QQuickView):
 			log.error('Could not download %s because of %s.' % (url, reply.errorString()))
 			return False
 
-		if dataType not in ['Plan', 'News', 'Announcement', 'Content']:
+		if dataType not in [self.DATA_TYPE_PLAN, self.DATA_TYPE_NEWS, self.DATA_TYPE_ANNOUNCEMENT, self.DATA_TYPE_CONTENT]:
 			# must be a PDF....
 			self.finishedDownloadingPdf(reply)
 			return False
@@ -1743,9 +2051,9 @@ class VPlanMainWindow(QQuickView):
 			# no valid data returned.
 			dataContent = None
 
-		if dataType == 'Plan' and dataContent is not None:
+		if dataType == self.DATA_TYPE_PLAN and dataContent is not None:
 			self.parseNewPlanData(dataContent)
-		elif dataType == 'News' and dataContent is not None:
+		elif dataType == self.DATA_TYPE_NEWS and dataContent is not None:
 			for news in dataContent:
 				# extract image if there is an image.
 				parser = ContentImageFinder()
@@ -1756,12 +2064,12 @@ class VPlanMainWindow(QQuickView):
 				else:
 					imgUrl = ''
 				news['imgUrl'] = imgUrl
-				self.ebbPlanHandler.newsAdded.emit(QVariant(news))
-		elif dataType == 'Announcement' and dataContent is not None:
+				self.ebbNewsHandler.newsAdded.emit(QVariant(news))
+		elif dataType == self.DATA_TYPE_ANNOUNCEMENT and dataContent is not None:
 			for anno in dataContent:
 				if anno['release'] == '1':
-					self.ebbPlanHandler.announcementAdded.emit(QVariant(anno))
-		elif dataType == 'Content':
+					self.ebbAnnouncementHandler.add(anno)
+		elif dataType == self.DATA_TYPE_CONTENT:
 			# Example:
 			# {
 			# 	'pdfUrl': 'http://fls.local/files/ebbPdf/553cd6320fcddreceipt_quadre_du_net.pdf', 
@@ -1923,6 +2231,8 @@ if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
 	QtCore.qInstallMessageHandler(qt_message_handler)
 	qmlRegisterType(EbbPlanHandler, 'EbbPlanHandler', 1, 0, 'EbbPlanHandler')
+	qmlRegisterType(EbbNewsHandler, 'EbbNewsHandler', 1, 0, 'EbbNewsHandler')
+	qmlRegisterType(EbbAnnouncementHandler, 'EbbAnnouncementHandler', 1, 0, 'EbbAnnouncementHandler')
 	qmlRegisterType(EbbContentHandler, 'EbbContentHandler', 1, 0, 'EbbContentHandler')
 	ds = VPlanMainWindow(app)
 
