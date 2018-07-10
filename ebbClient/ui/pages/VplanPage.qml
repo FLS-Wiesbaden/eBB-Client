@@ -109,6 +109,10 @@ Column {
 			console.log('Yeah... new plan is available.')
 			aDayList = ebbPlanHandler.getTimes
 			aPlanList = []
+			dayListModel.clear()
+			dayPageListModel.clear()
+			vplanModel.clear()
+			vplanModelTemp.clear()
 			txtStand.text = qsTr('Stand: ') + ebbPlanHandler.getStand + ' h'
 			if (vplanBusy.visible) {
 				vplanBusy.visible = false
