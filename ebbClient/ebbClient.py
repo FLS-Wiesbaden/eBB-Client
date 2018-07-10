@@ -28,7 +28,7 @@ import base64, subprocess, datetime
 import popplerqt5, shutil, math
 
 __author__ = 'Lukas Schreiner'
-__copyright__ = 'Copyright (C) 2012 - 2016 Website-Team Friedrich-List-Schule-Wiesbaden'
+__copyright__ = 'Copyright (C) 2012 - 2018 Website-Team Friedrich-List-Schule-Wiesbaden'
 __version__ = 0.9
 
 formatter = logging.Formatter('%(asctime)-15s %(message)s', datefmt='%b %d %H:%M:%S')
