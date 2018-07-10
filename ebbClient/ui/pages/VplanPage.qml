@@ -1,6 +1,7 @@
 import QtQuick 2.11
 import QtGraphicalEffects 1.0
-import QtQuick.Controls 1.3
+import QtQuick.Controls 1.4
+import QtQuick.Controls.Styles 1.4
 import QtQuick.Window 2.2
 import EbbPlanHandler 1.0
 import EbbNewsHandler 1.0
@@ -109,6 +110,11 @@ Column {
 			aDayList = ebbPlanHandler.getTimes
 			aPlanList = []
 			txtStand.text = qsTr('Stand: ') + ebbPlanHandler.getStand + ' h'
+			if (vplanBusy.visible) {
+				vplanBusy.visible = false
+				vplanContent.visible = true
+				vplanContentSecond.visible = true
+			}
 			reloadListModels()
 			// restart timer - just to be sure, that he not immediately change
 			// the page!
@@ -1265,6 +1271,30 @@ Column {
 				}
 			}
 		}
+
+		Rectangle {
+			id: vplanBusy
+			width: parent.width
+			height: parent.height
+
+			BusyIndicator {
+				anchors.centerIn: parent
+				id: vplanBusyIndicator
+				running: vplanBusyIndicator.visible
+				style: BusyIndicatorStyle {
+					indicator: Image {
+						visible: control.running
+						source: "data:image/svg+xml;utf8,<svg height=\"128px\" version=\"1.0\" viewBox=\"0 0 128 128\" width=\"128px\" xml:space=\"preserve\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:svg=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"><g><path d=\"M75.4 126.63a11.43 11.43 0 0 1-2.1-22.65 40.9 40.9 0 0 0 30.5-30.6 11.4 11.4 0 1 1 22.27 4.87h.02a63.77 63.77 0 0 1-47.8 48.05v-.02a11.38 11.38 0 0 1-2.93.37z\" fill=\"#979797\"/></g></svg>"
+						RotationAnimator on rotation {
+							running: control.running
+							loops: Animation.Infinite
+							duration: 2000
+							from: 0 ; to: 360
+						}
+					}
+				}
+			}
+		}
 	}
 
 	Shortcut {
@@ -1313,6 +1343,10 @@ Column {
 			dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
 			reloadListModels()
 			ebbPlanHandler.setMaxEntries(Math.floor(vplanContentContainer.height / (gridVplan.cellHeight + 27))*2)
+			// show busy indicator.
+			vplanContent.visible = false
+			vplanContentSecond.visible = false
+			vplanBusy.visible = true
 		}
 	}
 
