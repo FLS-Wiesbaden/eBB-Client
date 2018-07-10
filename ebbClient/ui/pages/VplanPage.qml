@@ -1,4 +1,4 @@
-import QtQuick 2.6
+import QtQuick 2.11
 import QtGraphicalEffects 1.0
 import QtQuick.Controls 1.3
 import QtQuick.Window 2.2
@@ -37,6 +37,9 @@ Column {
 	property double colHour: 0
 	property double colOriginal: 0
 	property double colChange: 0
+
+	// For some toggles
+	property bool aBreak: false
 
 	EbbPlanHandler {
 		id: ebbPlanHandler
@@ -572,6 +575,20 @@ Column {
 							source: index == aAnnoIdx ? '../../res/img/bullet_selected.png' : '../../res/img/bullet.png'
 							anchors.centerIn: parent
 						}
+
+						MouseArea {
+							cursorShape: Qt.PointingHandCursor
+							anchors.fill: parent
+							onClicked: {
+								if (index != aAnnoIdx) {
+									console.log("Clicked on announcement bullet.")
+									aAnnoIdx = index
+									updateActiveAnno(true)
+								} else {
+									console.log("Clicked on active announcement bullet.")
+								}
+							}
+						}
 					}
 				}
 				ListView {
@@ -771,6 +788,20 @@ Column {
 							id: dayListDelegateImage
 							source: index == aNewsIdx ? '../../res/img/bullet_selected.png' : '../../res/img/bullet.png'
 							anchors.centerIn: parent
+						}
+
+						MouseArea {
+							cursorShape: Qt.PointingHandCursor
+							anchors.fill: parent
+							onClicked: {
+								if (index != aNewsIdx) {
+									console.log("Clicked on news bullet: " + index)
+									aNewsIdx = index
+									updateActiveNews(true)
+								} else {
+									console.log("Clicked on active news bullet.")
+								}
+							}
 						}
 					}
 				}
@@ -1236,6 +1267,44 @@ Column {
 		}
 	}
 
+	Shortcut {
+		sequence: "Space"
+		onActivated: {
+			console.log("Spacebar pressed, toggle pause/continue!")
+			if (aBreak) {
+				continuePlan()
+				aBreak = false
+			} else {
+				suspendPlan()
+				aBreak = true
+			}
+		}
+	}
+
+	Shortcut {
+		sequence: "Right"
+		onActivated: {
+			console.log("User asked to go to next page (we've only one direction)")
+			nextPage()
+		}
+	}
+
+	Shortcut {
+		sequence: "F5"
+		onActivated: {
+			console.log("Request reload of client")
+			ebbPlanHandler.triggerReload()
+		}
+	}
+
+	Shortcut {
+		sequence: "Ctrl+Q"
+		onActivated: {
+			console.log("Request quit of application")
+			ebbPlanHandler.triggerQuit()
+		}
+	}
+
 	function loadPrimaryData() {
 		// Do this here only, if we don't have data yet!
 		if (aDayList.length <= 0) {
@@ -1293,6 +1362,31 @@ Column {
 			newsContainer2.idx = aNewsIdx
 			newsContainer2.uuid = ebbNewsHandler.generateUuid
 			aFirstNews = true
+		}
+	}
+
+	function updateActiveNews(guidChange) {
+		console.log('Update the active shown news: ' + aNewsIdx)
+		var newsObj = newsListModel.get(aNewsIdx)
+
+		if (!aFirstNews) {
+			// We prepare the first rectangle.
+			newsText1.text = newsObj.subject
+			newsTopic1.text = newsObj.topic
+			newsIcon1.source = newsObj.img
+			newsContainer1.idx = aNewsIdx
+			if (guidChange) {
+				newsContainer1.uuid = ebbNewsHandler.generateUuid
+			}
+		} else {
+			// We prepare the second rectangle.
+			newsText2.text = newsObj.subject
+			newsTopic2.text = newsObj.topic
+			newsIcon2.source = newsObj.img
+			newsContainer2.idx = aNewsIdx
+			if (guidChange) {
+				newsContainer2.uuid = ebbNewsHandler.generateUuid
+			}
 		}
 	}
 

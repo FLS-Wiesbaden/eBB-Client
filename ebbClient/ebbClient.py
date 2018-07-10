@@ -997,6 +997,10 @@ class EbbPlanHandler(QObject):
 	planAvailable = pyqtSignal()
 	planColSizeChanged = pyqtSignal([QVariant], arguments=['planSizes'])
 
+	# Reload requested by e.g. F5.
+	requestReload = pyqtSignal()
+	requestQuit = pyqtSignal()
+
 	def __init__(self, parent=None):
 		QObject.__init__(self, parent)
 		# workaround to set these things from the beginning!
@@ -1105,6 +1109,14 @@ class EbbPlanHandler(QObject):
 
 	def _triggerPresenter(self):
 		return self.plan.triggerPresenter
+
+	@pyqtSlot()
+	def triggerReload(self):
+		self.requestReload.emit()
+
+	@pyqtSlot()
+	def triggerQuit(self):
+		self.requestQuit.emit()
 
 	@pyqtSlot()
 	def onConnected(self):
@@ -1618,6 +1630,8 @@ class VPlanMainWindow(QQuickView):
 		self.ebbPlanHandler = rootObject.findChild(EbbPlanHandler)
 		self.ebbPlanHandler.setEbbConfig(self.config)
 		self.ebbPlanHandler.setFlsConfig(self.flsConfig)
+		self.ebbPlanHandler.requestReload.connect(self.reloadEbb)
+		self.ebbPlanHandler.requestQuit.connect(self.requestQuitEbb)
 		self.ebbAnnouncementHandler = rootObject.findChild(EbbAnnouncementHandler)
 		self.ebbAnnouncementHandler.setEbbConfig(self.config)
 		self.ebbAnnouncementHandler.setFlsConfig(self.flsConfig)
@@ -1974,12 +1988,33 @@ class VPlanMainWindow(QQuickView):
 				# reset and load all data again!
 				log.info('Got a reset event. First disable all.')
 				self.ebbPlanHandler.reset.emit()
+				self.ebbNewsHandler.reset.emit()
+				self.ebbAnnouncementHandler.reset.emit()
 				# clear the cache.
 				log.info('Clear the cache...')
 				self.manager.clearAccessCache()
 				log.info('Now reload all data.')
 				self.loaded = False
 				self.loadPlanData()
+
+	@pyqtSlot()
+	def reloadEbb(self):
+		# reset and load all data again!
+		log.info('Got a reset event through SLOT.')
+		self.ebbPlanHandler.reset.emit()
+		self.ebbNewsHandler.reset.emit()
+		self.ebbAnnouncementHandler.reset.emit()
+		# clear the cache.
+		log.info('Clear the cache...')
+		self.manager.clearAccessCache()
+		log.info('Now reload all data.')
+		self.loaded = False
+		self.loadPlanData()
+
+	@pyqtSlot()
+	def requestQuitEbb(self):
+		self.sigQuitEBB.emit()
+		self.quitEBB()
 
 	@pyqtSlot()
 	def sendEbbState(self):
@@ -2039,6 +2074,8 @@ class VPlanMainWindow(QQuickView):
 			url = reply.url().toString()
 			log.error('Could not download %s because of %s.' % (url, reply.errorString()))
 			return False
+		else:
+			log.debug('We received an answer from CMS of type: {:s}'.format(dataType))
 
 		if dataType not in [self.DATA_TYPE_PLAN, self.DATA_TYPE_NEWS, self.DATA_TYPE_ANNOUNCEMENT, self.DATA_TYPE_CONTENT]:
 			# must be a PDF....
