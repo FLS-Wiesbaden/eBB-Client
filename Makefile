@@ -1,7 +1,7 @@
 cacheDirs  := cache __pycache__
 buildDir   = build
 debugFlg   = 
-PACKAGE = VPlanClient
+PACKAGE = ebbClient
 #Directory with ui and resource files
 UI_FILES = main.qml pages/PresenterPage.qml pages/ContentPage.qml pages/FirealarmPage.qml pages/VplanPage.qml
 RESOURCES = logos.qrc
@@ -23,7 +23,7 @@ PYPARM =
 all: createDir debug
 
 run: all
-	$(PYTHON) $(PYPARM) $(buildDir)/$(PACKAGE)/VPlanClient.py
+	$(PYTHON) $(PYPARM) $(buildDir)/$(PACKAGE)/ebbClient.py
 
 release: PYPARM := -OO
 release: pythons resources ui images
@@ -46,7 +46,7 @@ $(buildDir)/%.py: %.py
 ui: $(COMPILED_UI)
 $(buildDir)/$(UI_DIR)/%.qml: $(UI_DIR)/%.qml
 	cp $< $@
- 
+
 resources: $(COMPILED_RESOURCES)  
 $(buildDir)/$(PACKAGE)/%_rc.py: $(RESOURCE_DIR)/%.qrc
 	$(PYRCC) $< -o $@
