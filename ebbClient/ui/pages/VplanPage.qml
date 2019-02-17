@@ -1346,7 +1346,7 @@ Column {
 			txtStand.text = qsTr("Lade Daten...")
 			dayNameLabel.text = qsTr("Keine Vertretungen verfügbar.")
 			reloadListModels()
-			ebbPlanHandler.setMaxEntries(Math.floor(vplanContentContainer.height / (gridVplan.cellHeight + 27))*2)
+			ebbPlanHandler.setMaxEntries(Math.floor(vplanContentContainer.height / (gridVplan.cellHeight + 30))*2)
 			// show busy indicator.
 			vplanContent.visible = false
 			vplanContentSecond.visible = false

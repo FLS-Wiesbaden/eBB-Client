@@ -516,6 +516,7 @@ class DsbServer(QThread):
 						# read til \n
 						newData = b''
 						cancel = False
+						skip = False
 						while not cancel:
 							try:
 								newData += s.recv(1)
@@ -532,6 +533,9 @@ class DsbServer(QThread):
 							except SSL.WantReadError as e:
 								log.error('error occurred while reading (WantReadError): %s' % (e,))
 								cancel = True
+								# Lets try to write again some data...
+								skip = True
+								self.poller.modify(s, DsbServer.READ_WRITE)
 							except SSL.WantWriteError as e:
 								log.error('error occurred while reading (WantWriteError): %s' % (e,))
 								cancel = True
@@ -558,14 +562,20 @@ class DsbServer(QThread):
 								log.info('Disconnect...')
 								self.poller.unregister(s)
 								self.runState = False
-								s.shutdown(socket.SHUT_WR)
+								if self.config.getboolean('connection', 'ssl'):
+									s.shutdown()
+								else:
+									s.shutdown(socket.SHUT_WR)
 								s.close()
 								self.sock = None
-						else:
+						elif not skip:
 							log.info('Disconnect - remote issue?')
 							self.poller.unregister(s)
 							self.runState = False
-							s.shutdown(socket.SHUT_WR)
+							if self.config.getboolean('connection', 'ssl'):
+								s.shutdown()
+							else:
+								s.shutdown(socket.SHUT_WR)
 							s.close()
 							self.sock = None
 							error = True
@@ -573,7 +583,10 @@ class DsbServer(QThread):
 					elif flag & select.POLLHUP:
 						log.info('Client hung up..')
 						self.poller.unregister(s)
-						s.shutdown(socket.SHUT_WR)
+						if self.config.getboolean('connection', 'ssl'):
+							s.shutdown()
+						else:
+							s.shutdown(socket.SHUT_WR)
 						s.close()
 						self.sock = None
 					elif flag & select.POLLOUT:
@@ -595,7 +608,10 @@ class DsbServer(QThread):
 						log.info('Will stop listening!')
 						self.runState = False
 						self.poller.unregister(s)
-						s.shutdown(socket.SHUT_WR)
+						if self.config.getboolean('connection', 'ssl'):
+							s.shutdown()
+						else:
+							s.shutdown(socket.SHUT_WR)
 						s.close()
 						self.sock = None
 
@@ -837,8 +853,9 @@ class VPlan(QObject):
 				planT[str(day)].sortEntries()
 
 			# calculate field factors...
-			maxFieldLengths['classn'] += 8
-			maxFieldLengths['hour'] += 5
+			maxFieldLengths['classn'] += 10
+			maxFieldLengths['hour'] += 6
+			maxFieldLengths['original'] += 2
 			comLength = 0
 			for k, v in maxFieldLengths.items():
 				comLength += v
